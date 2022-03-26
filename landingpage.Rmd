@@ -2,7 +2,11 @@
 title: "Landing Page"
 author: "Alex Socarras"
 date: "3/26/2022"
+<<<<<<< HEAD
 output: github_document
+=======
+output: html_document
+>>>>>>> 8fb56c83e21a580465337a1886355bfb191aae41
 ---
 
 ```{r setup, include=FALSE}
