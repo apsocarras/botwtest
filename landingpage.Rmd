@@ -2,19 +2,26 @@
 title: "Landing Page"
 author: "Alex Socarras"
 date: "3/26/2022"
-<<<<<<< HEAD
 output: github_document
-=======
-output: html_document
->>>>>>> 8fb56c83e21a580465337a1886355bfb191aae41
 ---
 
 Hello world.
 
 ```{r, eval = TRUE}
 library(dplyr)
+library(ggplot2)
+library(lubridate)
 
-tibs <- readxl::read_xlsx("BestoftheWorst/data/botw_all2.xlsx")
-mutate(tibs, date = lubridate::ymd_hms(date)) %>% select(ep_num, date)
+tibs <- readxl::read_xlsx("BestoftheWorst/data/botw_all2.xlsx") %>% mutate(date = ymd_hms(date), vid_length = duration(duration))
+```
+
+Now we want to try adding a plot to our rmd file, checking that it gets added to our md file under the landingpage_files folder, then committing and pushing all that to github. 
+
+```{r}
+
+tibs %>% ggplot(aes(x = date, y = vid_length, color = subseries)) + geom_point() 
+                  
+
+
 ```
 

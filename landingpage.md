@@ -3,33 +3,47 @@ Landing Page
 Alex Socarras
 3/26/2022
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax
-for authoring HTML, PDF, and MS Word documents. For more details on
-using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that
-includes both content as well as the output of any embedded R code
-chunks within the document. You can embed an R code chunk like this:
+Hello world.
 
 ``` r
-summary(cars)
+library(dplyr)
 ```
 
-    ##      speed           dist       
-    ##  Min.   : 4.0   Min.   :  2.00  
-    ##  1st Qu.:12.0   1st Qu.: 26.00  
-    ##  Median :15.0   Median : 36.00  
-    ##  Mean   :15.4   Mean   : 42.98  
-    ##  3rd Qu.:19.0   3rd Qu.: 56.00  
-    ##  Max.   :25.0   Max.   :120.00
+    ## 
+    ## Attaching package: 'dplyr'
 
-## Including Plots
+    ## The following objects are masked from 'package:stats':
+    ## 
+    ##     filter, lag
 
-You can also embed plots, for example:
+    ## The following objects are masked from 'package:base':
+    ## 
+    ##     intersect, setdiff, setequal, union
 
-![](landingpage_files/figure-gfm/pressure-1.png)<!-- -->
+``` r
+library(ggplot2)
+library(lubridate)
+```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to
-prevent printing of the R code that generated the plot.
+    ## 
+    ## Attaching package: 'lubridate'
+
+    ## The following objects are masked from 'package:base':
+    ## 
+    ##     date, intersect, setdiff, union
+
+``` r
+tibs <- readxl::read_xlsx("BestoftheWorst/data/botw_all2.xlsx") %>% mutate(date = ymd_hms(date), vid_length = duration(duration))
+```
+
+Now we want to try adding a plot to our rmd file, checking that it gets
+added to our md file under the landingpage\_files folder, then
+committing and pushing all that to github.
+
+``` r
+tibs %>% ggplot(aes(x = date, y = vid_length, color = subseries)) + geom_point() 
+```
+
+    ## Warning: Removed 11 rows containing missing values (geom_point).
+
+![](landingpage_files/figure-gfm/unnamed-chunk-2-1.png)<!-- -->
