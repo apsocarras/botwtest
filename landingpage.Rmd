@@ -19,9 +19,8 @@ Now we want to try adding a plot to our rmd file, checking that it gets added to
 
 ```{r}
 
-tibs %>% ggplot(aes(x = date, y = vid_length, color = subseries)) + geom_point() 
+tibs %>% ggplot(aes(x = date, y = vid_length, color = subseries)) + geom_point()
                   
-
 
 ```
 

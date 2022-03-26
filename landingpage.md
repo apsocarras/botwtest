@@ -41,7 +41,7 @@ added to our md file under the landingpage\_files folder, then
 committing and pushing all that to github.
 
 ``` r
-tibs %>% ggplot(aes(x = date, y = vid_length, color = subseries)) + geom_point() 
+tibs %>% ggplot(aes(x = date, y = vid_length, color = subseries)) + geom_point()
 ```
 
     ## Warning: Removed 11 rows containing missing values (geom_point).
