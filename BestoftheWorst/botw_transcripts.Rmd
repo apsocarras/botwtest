@@ -1,0 +1,64 @@
+---
+title: "Scraping Transcripts with Python"
+author: "Alex Socarras"
+date: "3/11/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{python}
+import csv  
+import pandas
+import json
+
+botw_all_df = pandas.read_csv("data/botw_all.csv", sep = ",")
+ep_ids = botw_all_df.loc[:,["ep_num", "video_id"]].dropna()
+
+```
+
+```{python}
+from youtube_transcript_api import YouTubeTranscriptApi as YTA
+
+caps = list()
+for video_id in ep_ids["video_id"]:
+  row_index = ep_ids.index[ep_ids["video_id"] == video_id].tolist()
+  ep_no = ep_ids["ep_num"][row_index].tolist()[0]
+  try:
+    transcript = YTA.get_transcript(video_id)
+    for line in transcript:
+      line.update({"ep_num":ep_no})
+  except:
+    transcript = [{"text": "Failed to transcribe", "start": None, "duration":None, "ep_num":ep_no}]
+  caps.extend(transcript)
+
+with open("data/captions.json", "w") as outfile: 
+  json.dump(caps, outfile)  
+  
+## Age-Restricted Videos ## 
+agerest_epnums = [3, 10, 15, 20, 22, 23, 25, 28, 29, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 46, 48, 49, 51, 55, 64, 92, 94, 104, 106] # Ideally you would put a check for age restrictions in the "except" block above instead of doing this manually, but that getting those jsons took forever to begin with -- don't want to redo it. 
+restr_ep_ids = ep_ids[ep_ids["ep_num"].isin(agerest_epnums)] # for some reason, ep 40 didn't get its video_id in botw_all.csv. We'll repair that in our list now, csv later:
+restr_ep_ids.loc[46,"video_id"] = "M2khjpOxzc" # Warning: restr_ep_ids[restr_ep_ids["ep_num"] == 40]["video_id"] = "M2khjpOxzc" only edits copy 
+
+restr_caps = list()
+for video_id in restr_ep_ids["video_id"]:
+  row_index = restr_ep_ids.index[restr_ep_ids["video_id"] == video_id].tolist()
+  ep_no = restr_ep_ids["ep_num"][row_index].tolist()[0]
+  try: 
+    transcript = YTA.get_transcript(video_id, cookies = "youtube.com_cookies.txt")
+    for line in transcript:
+      line.update({"ep_num":ep_no})
+  except:
+    transcript = [{"text": "Transcript Unavailable", "start": None, "duration":None, "ep_num":ep_no}]
+  restr_caps.extend(transcript)
+
+with open("data/restr_caps.json", "w") as outfile: 
+  json.dump(restr_caps, outfile)  
+
+
+```
+
+
+

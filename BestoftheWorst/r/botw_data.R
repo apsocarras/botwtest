@@ -1,0 +1,317 @@
+library(tuber)
+library(tidyverse)
+library(lubridate)
+library(purrr)
+library(stringr)
+library(httr)
+library(readxl)
+library(tidyjson)
+
+# TO-DO
+# Expanding Dataset:
+    # add columns: 
+    #   non-panelists, readers/introducers, discussers, spinners, wheel videos, duration of discussion
+    # New data frames:
+    #   movie data (imdb links) + data on RLM's entire collection
+# ANALYSIS & VISUALIZATION: 
+# How do views over time compare to overall channel/other series (e.g. HITB, RE:View)?
+      # Views change all the time so this part needs to be automatically updated 
+# Transcript sentiment analysis: 
+      # Time (across whole series but also within a given episode)
+      # Panelists
+      # Subseries 
+      # Machine Learning: predict which movie wins/loses an episode based on transcript?  
+      # Ranking episodes based on a given emotion (confusion, happiness, etc.)
+# Panelists/Guests: 
+    # Who leads discussion the most vs. their no. of appearances?
+    # Who's the biggest contrarian?
+    # Which movies did each randomly pick?
+    # Map of host-to-panelist connections
+# Movie Data: 
+    # Which movies were discussed for the longest period of time?
+    # After a movie appears in an episode, how does its IMDB rating change? 
+    # Recurring names/companies & connections between films 
+    # Which people had greatests discrepancy between the rating of what they appeared in on BOTW vs. their entire career?
+        # My guess would be someone from Keaton's Cop or David Carradine or Denise Crosby or Dan Haggerty 
+    # "Curse of the Worst" 
+    # Wheel movies (no. of and order of appearances)
+    # Ranking movies on series performance by genre and other tags (e.g. creature/monster movie)
+# Ranking Episodes: 
+  # Generate a ranking of all episodes based on user input 
+  # Identify variables which predict a video's rank in this ordering 
+# PUBLISHING
+  # Neat, RMarkdown tutorial style write-up. 
+  # Publish on blogdown personal website 
+  # Include ep 50 cameron mitchell movie chart 
+### API LOG-IN info ### 
+#Web Client ID: 750567258427-2msp8ndrkiiumuv5i40ni76cai7129dd.apps.googleusercontent.com
+#Web Client Secret: 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
+#Desktop Client ID: 750567258427-tf07hsleu2ov7sp6fcp538cg7itkg7ii.apps.googleusercontent.com
+#Desktop Client Secret: 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
+
+client_id <- "750567258427-tf07hsleu2ov7sp6fcp538cg7itkg7ii.apps.googleusercontent.com"
+client_secret <- "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"
+  
+yt_oauth(
+  app_id = client_id, 
+  app_secret = client_secret,
+  token = '')
+
+### USING TUBER + REDDIT SHEET to create botw_all.csv ###
+# botw_playlist_id <- str_split(
+#   string = "https://www.youtube.com/playlist?list=PLJ_TJFLc25JR3VZ7Xe-cmt4k3bMKBZ5Tm", 
+#   pattern = "=",
+#   n = 2, simplify = TRUE)[,2]
+# 
+# botw1_raw <- get_playlist_items(filter = 
+#            c(playlist_id = botw_playlist_id),
+#            part = "snippet",
+#            max_results = 100,
+#            page_token = "EAAaBlBUOkNESQ",
+#            simplify = TRUE)
+# 
+# botw2_raw <- get_playlist_items(filter = 
+#           c(playlist_id = botw_playlist_id),
+#           part = "snippet",
+#           max_results = 50,
+#           simplify = FALSE)
+# 
+# 
+# botw1_tib <- botw1_raw %>% select(date = snippet.publishedAt, 
+#     title = snippet.title, 
+#     description = snippet.description, 
+#     video_id = snippet.resourceId.videoId) %>%
+#     rowid_to_column("pl_order") %>%
+#     mutate(pl_order = rev(as.integer(pl_order))) %>% 
+#     arrange(pl_order)
+# 
+# botw2_list <- list()
+#   
+# for (j in c(1:50)) {
+#   info <- botw2_raw[["items"]][[j]]$snippet[c("publishedAt", "title", "description", "resourceId")]
+#   botw2_list[[j]] <- info
+# }
+# 
+# 
+# botw2_tib <- as_tibble(botw2_list, .name_repair = "universal") %>%
+#   rename_with(~ gsub("...", "",.x)) %>% 
+#   mutate(categories = c("date","title","description","resource")) %>%
+#   select(categories,1:50) %>% 
+#   pivot_longer(names_to = "pl_order", cols = c(2:51)) %>%
+#   mutate(pl_order = rev(as.integer(pl_order)) + 70) %>% 
+#   pivot_wider(names_from = categories) %>% 
+#   unnest(cols = 2:5) %>% 
+#   filter(!grepl("youtube#", resource)) %>%
+#   mutate(video_id = as.character(resource), .keep = c("unused"), 
+#          title = replace(title, title == "Deleted video", 
+#             "Best of the Worst: Diamond Cobra vs the White Fox")) %>% 
+#   arrange(pl_order)
+# 
+# 
+# botw_tib <- full_join(botw1_tib,botw2_tib)
+# 
+# botw_tib <- botw_tib %>%
+#   mutate(ep_num = 0, subseries = "", holiday = "")
+#      
+# 
+# non_episodes <- botw_tib %>% 
+#   filter(!grepl("Best of the Worst(:| Episode| Spotlight)", title))
+# 
+# episodes <- botw_tib %>% 
+#   filter(!title %in% non_episodes$title) %>% 
+#   mutate(ep_num = row_number())
+# 
+# botw <- full_join(non_episodes, episodes) %>% 
+#   mutate(ep_num = ifelse(ep_num == 0, NA,ep_num)) %>%
+#          arrange(pl_order) %>%
+#   select(pl_order,ep_num, date:holiday)
+# 
+# #for adjusting subseries
+# spotlight_other <- c(27,28,57,60,83,93,96)
+# main_other <- c(1,18,74,87)
+# random_other <- c(37,48,62,74,91,108,109)
+# 
+# botw <- botw %>% 
+#   mutate (subseries = case_when(
+#         is.na(ep_num) ~ "extras",
+#         grepl(",", title) ~ "main",
+#         ep_num == 64 ~ "bl_spine, spotlight",
+#         grepl("[Ww]heel",description) | grepl("[Ww]heel", title) ~ "wheel",
+#         grepl("[Ss]pine", description) | grepl("[Ss]pine", title) ~ "bl_spine",
+#         grepl("([Pp]linketto | ball)", description) | grepl("[Pp]linketto", title) ~ "plinketto",
+#         grepl("[Ss]potlight", description) | grepl("[Ss]potlight", title) ~ "spotlight",
+#         ep_num %in% spotlight_other ~ "spotlight",
+#         ep_num %in% main_other ~ "main",
+#         ep_num %in% random_other ~ "random_other", 
+#         ep_num == 97 ~ "bl_spine",
+#         ep_num == 106 ~ "main"))
+# 
+# 
+# # ERROR: SWHS Two-Part episode was counted as two separate episodes. 
+#  botw <- botw %>% 
+#      mutate(ep_num = case_when(ep_num < 28 ~ ep_num, 
+#                           ep_num >= 28 ~ ep_num-1))
+#  
+#  # other columns 
+#  
+# botw <- botw %>% 
+#    mutate(holiday = case_when(grepl("(Christmas| Holiday |-mas)", title) ~ "christmas",
+#                               grepl("Halloween", description) & subseries != "wheel" ~ "halloween", 
+#                               grepl("Hollywood Cop", title) ~ "tums festival", 
+#                               is.na(holiday) ~ "none"), 
+#           date = as_datetime(date))
+# 
+# fanPath <- "~/R/BestoftheWorst/data/BoTW Spreadsheet V2 .xlsx"
+# 
+# get_duration <- function(time) { # remove junk ymd data from length column 
+#   time %>% 
+#     str_split(" ") %>%
+#     map_chr(2) %>% 
+#     lubridate::hms() 
+#   } # we'll need this for the next two sheets
+# 
+# 
+# fansheet_1 <- Filter(function(x)!all(is.na(x)), 
+#                      read_excel(fanPath, sheet = 1, col_names = TRUE))[,1:23]
+# for (i in c(8:15)) {
+#   fansheet_1[[i]] <- case_when(grepl("✓", fansheet_1[[i]]) ~ names(fansheet_1)[[i]], 
+#                                grepl("X", fansheet_1[[i]]) ~ "", 
+#                                TRUE ~ fansheet_1[[i]]) } # TRUE is the else condition
+# 
+# fansheet_2 <- Filter(function(x)!all(is.na(x)), 
+#                      read_excel(fanPath, sheet = 2, col_names = TRUE))
+#   for (i in c(3:8)) {
+#       fansheet_2[[i]] <- case_when(grepl("✓", fansheet_2[[i]]) ~ names(fansheet_2)[[i]], 
+#                                grepl("X", fansheet_2[[i]]) ~ "", 
+#                                TRUE ~ fansheet_2[[i]]) } 
+# 
+# main_eps <- fansheet_1 %>% 
+#   rename_all(tolower) %>% 
+#   rename(theme = `theme / gimmick`, best = `best of the worst`, 
+#          worst = `worst of the worst`, destruction_method = `method of destruction`,
+#          date = `date released`) %>% 
+#   unite("films", 2:5, sep = ", ", remove = TRUE, na.rm = TRUE) %>% 
+#   unite("panelists", mike:guests, sep = " ", remove = TRUE, na.rm = TRUE) %>% 
+#   mutate(panelists = str_squish(str_remove_all(panelists, "from Canada|&")),
+#          duration = get_duration(length),
+#          unanimous = case_when(grepl("✓", `unanimous win`) ~ "yes", 
+#                                grepl("X", `unanimous win`) ~ "no", 
+#                                TRUE ~ `unanimous win`)) %>%
+#   select(episode, date, duration, films:best, unanimous, worst:destruction_method, 
+#          -`youtube links`, -`# gimmik`)
+#     
+# spotlight_eps <- fansheet_2 %>% 
+#   rename_all(tolower) %>%
+#   unite("panelists", mike:guests, sep = " ") %>% 
+#   mutate(theme = "spotlight",
+#          panelists = str_squish(str_remove_all(panelists, "from Canada")), 
+#          duration = get_duration(length), 
+#          date = `date released`,
+#          films = film) %>% 
+#  select(episode, date, duration, films, theme, panelists, editor)
+# 
+# all_eps <- full_join(main_eps, spotlight_eps) %>% 
+#   mutate(date = as_datetime(date)) %>%
+#   rename(ep_num = episode) %>% 
+#   arrange(ep_num) 
+# 
+# botw_all <- full_join(botw, all_eps %>% select(-date), by = c("ep_num")) %>% 
+#   mutate(link = paste("https://www.youtube.com/watch?v=", video_id, sep = "")) 
+# YOUTUBE LINKS EASILY GENERABLE FROM VIDEO_ID COLUMN!! See above 
+# youtube_links <- hyperlinks %>%
+#   filter(grepl("youtube", token)) %>%
+#   mutate(ep_num = as.numeric(str_remove(character, "Episode "),
+#                   .keep = c("unused")),
+#          link = token) %>%
+#   select(ep_num, link) %>%
+#   arrange(ep_num)
+# 
+# missing_links <- tibble(ep_num = c(76, 92, 93, 105:108),
+#                         link = c("https://www.youtube.com/watch?v=6hHyn29O81k",
+#                                  "Video was removed due to copyright",
+#                                  "https://www.youtube.com/watch?v=-F0jtrV3RxI",
+#                                  "https://www.youtube.com/watch?v=R5xa7r6oIBQ",
+#                                  "https://www.youtube.com/watch?v=5jPtkjxU5jg",
+#                                  "https://www.youtube.com/watch?v=FBEYOlXNAC8",
+#                                  "https://www.youtube.com/watch?v=HgNKJhT74jU"))
+# 
+# youtube_links <- full_join(missing_links, youtube_links) %>% arrange(ep_num)
+# 
+# botw_all <- left_join(botw_all, youtube_links, by = c("ep_num")) %>%
+botw_all <- as_tibble(read_csv("data/botw_all.csv")) %>% 
+  mutate(date = mdy_hm(date))
+
+### TRANSCRIPTS ###
+# botw_transcripts.Rmd w/ Python YTApi -> json -> data/allcaptions2.csv ###
+# tidy_captions <- read_json("data/captions.json")
+# 
+# tidycap_tbl <- tidy_captions %>%
+#   gather_array %>% 
+#   spread_values(text = jstring("text"),
+#                 start = jstring("start"),
+#                 duration = jstring("duration"),
+#                 ep_num = jstring("ep_num")) %>% 
+#   as_tibble %>% 
+#   select(ep_num, text, start, duration)
+# tidycap_tbl <- tidycap_tbl %>% mutate(ep_num = as.integer(ep_num))
+#
+# tidy_restr_caps <- read_json("data/restr_caps.json")
+# tidyrcap_tbl <- tidy_restr_caps %>%
+#   gather_array %>%
+#   spread_values(text = jstring("text"),
+#                 start = jstring("start"),
+#                 duration = jstring("duration"),
+#                 ep_num = jstring("ep_num")) %>%
+#   as_tibble %>%
+#   select(ep_num, text, start, duration)
+# tidyrcap_tbl <- tidyrcap_tbl %>% mutate(ep_num = as.integer(ep_num), 
+#                                         start = as.numeric(start), 
+#                                         duration = as.numeric(duration))
+# 
+# tidycap <- as_tibble(read_csv("data/captions.csv")) 
+# 
+# write_excel_csv(full_join(tidycap,tidyrcap_tbl), "data/allcaptions.csv")
+# allcap <- as_tibble(read_csv("data/allcaptions.csv")) 
+# allcap <- allcap %>% filter(!grepl("transcribe", text))
+# 
+allcap <- as_tibble(read_csv("data/allcaptions2.csv"))
+
+allcap %>% arrange(ep_num) 
+
+### DATE CORRECTIONS ### Previously was date added to playlist, NOT upload date. Just use tuber again
+# date_check <- character(121)
+# for (i in seq_along(botw_all$pl_order)) {
+# 
+#   out <- tuber::get_video_details(botw_all$video_id[[i]],
+#                                           part = "snippet")$items[[1]]$snippet$publishedAt
+#   if (!is.null(out)) {
+#     date_check[[i]] <- out
+#   }
+# 
+# }
+# dc_df <- as_tibble(ymd_hms(date_check))
+# colnames(dc_df) <- c("date")
+# dc_df <- dc_df %>% mutate(pl_order = row_number()) %>% select(pl_order, date)
+# 
+# dc_df$date[[47]] <- botw_all$date[[47]]
+# dc_df$date[[103]] <- botw_all$date[[103]]
+# dc_df$date[[104]] <- botw_all$date[[104]]
+# 
+# botw_all$date <- dc_df$date
+# 
+# writexl::write_xlsx(botw_all, "data/botw_all2.xlsx")
+
+### IMDB DATA ###
+# fanPath <- "~/R/BestoftheWorst/data/BoTW Spreadsheet V2 .xlsx"
+imdb_links<- tidyxl::xlsx_cells(fanPath, sheets = c(1,2)) %>% # see YouTube Links section for fanPath
+  filter(!is.na(formula) & !is.na(character)) %>%
+  mutate(formula = map(formula, tidyxl::xlex)) %>% 
+  unnest(formula) %>% 
+  filter(grepl("imdb", token)) %>% 
+  select(character, token) 
+
+
+
+
+
+
