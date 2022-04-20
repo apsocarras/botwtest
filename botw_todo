@@ -1,27 +1,9 @@
----
-title: "botw_analviz"
-author: "Alex Socarras"
-date: "3/19/2022"
-output: html_document
----
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-
-library(dplyr)
-library(magrittr)
-library(ggplot2)
-library(readxl)
-library(readr)
-library(lubridate)
-
-botw_all2 <- read_xlsx("C:/Users/apsoc/Documents/R/BestoftheWorst/data/botw_all2.xlsx") %>%
-  mutate(date = ymd_hms(date), 
-         duration = duration(duration, units = "minutes"), 
-         ep_num = as.factor(ep_num)) %>% 
-  rename(vid_length = duration)
-
 # TO-DO
+# Expanding Dataset:
+    # add columns: 
+    #   non-panelists, readers/introducers, discussers, spinners, wheel videos, duration of discussion
+    # New data frames:
+    #   movie data (imdb links) + data on RLM's entire collection
 # ANALYSIS & VISUALIZATION: 
 # How do views over time compare to overall channel/other series (e.g. HITB, RE:View)?
       # Views change all the time so this part needs to be automatically updated 
@@ -34,13 +16,14 @@ botw_all2 <- read_xlsx("C:/Users/apsoc/Documents/R/BestoftheWorst/data/botw_all2
 # Panelists/Guests: 
     # Who leads discussion the most vs. their no. of appearances?
     # Who's the biggest contrarian?
-    # Which movies did each randomly pick?
+    # Which movies did each pick?
+    # Who picked the most winners/losers?
     # Map of host-to-panelist connections
 # Movie Data: 
     # Which movies were discussed for the longest period of time?
     # After a movie appears in an episode, how does its IMDB rating change? 
     # Recurring names/companies & connections between films 
-    # Which people had greatest discrepancy between the rating of what they appeared in on BOTW vs. their entire career?
+    # Which people had greatests discrepancy between the rating of what they appeared in on BOTW vs. their entire career?
         # My guess would be someone from Keaton's Cop or David Carradine or Denise Crosby or Dan Haggerty 
     # "Curse of the Worst" 
     # Wheel movies (no. of and order of appearances)
@@ -52,30 +35,8 @@ botw_all2 <- read_xlsx("C:/Users/apsoc/Documents/R/BestoftheWorst/data/botw_all2
   # Neat, RMarkdown tutorial style write-up. 
   # Publish on blogdown personal website 
   # Include ep 50 cameron mitchell movie chart 
-
-```
-
-
-
-
-## R Markdown
-
-```{r Basic Episode information}
-## From Basic botw_all2 table: 
-# Duration: 
-botw_all2 %>% 
-  filter(!is.na(ep_num)) %>% 
-  ggplot(aes(x = date, y = dhours(vid_length), color = subseries)) + 
-  geom_point() 
-
-```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+  
+  
+  
+  
+  

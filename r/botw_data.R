@@ -7,42 +7,7 @@ library(httr)
 library(readxl)
 library(tidyjson)
 
-# TO-DO
-# Expanding Dataset:
-    # add columns: 
-    #   non-panelists, readers/introducers, discussers, spinners, wheel videos, duration of discussion
-    # New data frames:
-    #   movie data (imdb links) + data on RLM's entire collection
-# ANALYSIS & VISUALIZATION: 
-# How do views over time compare to overall channel/other series (e.g. HITB, RE:View)?
-      # Views change all the time so this part needs to be automatically updated 
-# Transcript sentiment analysis: 
-      # Time (across whole series but also within a given episode)
-      # Panelists
-      # Subseries 
-      # Machine Learning: predict which movie wins/loses an episode based on transcript?  
-      # Ranking episodes based on a given emotion (confusion, happiness, etc.)
-# Panelists/Guests: 
-    # Who leads discussion the most vs. their no. of appearances?
-    # Who's the biggest contrarian?
-    # Which movies did each randomly pick?
-    # Map of host-to-panelist connections
-# Movie Data: 
-    # Which movies were discussed for the longest period of time?
-    # After a movie appears in an episode, how does its IMDB rating change? 
-    # Recurring names/companies & connections between films 
-    # Which people had greatests discrepancy between the rating of what they appeared in on BOTW vs. their entire career?
-        # My guess would be someone from Keaton's Cop or David Carradine or Denise Crosby or Dan Haggerty 
-    # "Curse of the Worst" 
-    # Wheel movies (no. of and order of appearances)
-    # Ranking movies on series performance by genre and other tags (e.g. creature/monster movie)
-# Ranking Episodes: 
-  # Generate a ranking of all episodes based on user input 
-  # Identify variables which predict a video's rank in this ordering 
-# PUBLISHING
-  # Neat, RMarkdown tutorial style write-up. 
-  # Publish on blogdown personal website 
-  # Include ep 50 cameron mitchell movie chart 
+
 ### API LOG-IN info ### 
 #Web Client ID: 750567258427-2msp8ndrkiiumuv5i40ni76cai7129dd.apps.googleusercontent.com
 #Web Client Secret: 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
@@ -57,7 +22,8 @@ yt_oauth(
   app_secret = client_secret,
   token = '')
 
-### USING TUBER + REDDIT SHEET to create botw_all.csv ###
+#### USING TUBER + REDDIT SHEET to create botw_all.csv -- info on episodes ####
+
 # botw_playlist_id <- str_split(
 #   string = "https://www.youtube.com/playlist?list=PLJ_TJFLc25JR3VZ7Xe-cmt4k3bMKBZ5Tm", 
 #   pattern = "=",
@@ -68,13 +34,13 @@ yt_oauth(
 #            part = "snippet",
 #            max_results = 100,
 #            page_token = "EAAaBlBUOkNESQ",
-#            simplify = TRUE)
+#            simplify = TRUE)                 # There was an issue trying to get all 150 playlist items in one call
 # 
 # botw2_raw <- get_playlist_items(filter = 
 #           c(playlist_id = botw_playlist_id),
 #           part = "snippet",
 #           max_results = 50,
-#           simplify = FALSE)
+#           simplify = FALSE)                 # Why did this have to be FALSE? I remember there was a reason but forget what
 # 
 # 
 # botw1_tib <- botw1_raw %>% select(date = snippet.publishedAt, 
@@ -108,12 +74,9 @@ yt_oauth(
 #   arrange(pl_order)
 # 
 # 
-# botw_tib <- full_join(botw1_tib,botw2_tib)
-# 
-# botw_tib <- botw_tib %>%
+# botw_tib <- full_join(botw1_tib,botw2_tib) %>%
 #   mutate(ep_num = 0, subseries = "", holiday = "")
 #      
-# 
 # non_episodes <- botw_tib %>% 
 #   filter(!grepl("Best of the Worst(:| Episode| Spotlight)", title))
 # 
@@ -241,8 +204,8 @@ yt_oauth(
 botw_all <- as_tibble(read_csv("data/botw_all.csv")) %>% 
   mutate(date = mdy_hm(date))
 
-### TRANSCRIPTS ###
-# botw_transcripts.Rmd w/ Python YTApi -> json -> data/allcaptions2.csv ###
+#### TRANSCRIPTS ####
+# See data/botw_transcripts.Rmd w/ Python YTApi -> json -> data/allcaptions2.csv ###
 # tidy_captions <- read_json("data/captions.json")
 # 
 # tidycap_tbl <- tidy_captions %>%
@@ -300,6 +263,26 @@ allcap %>% arrange(ep_num)
 # botw_all$date <- dc_df$date
 # 
 # writexl::write_xlsx(botw_all, "data/botw_all2.xlsx")
+
+
+
+
+#### Other Episode Data ####
+
+botw_otherdata <- readxl::read_xlsx("data/botw_otherdata.xlsx") 
+
+
+
+
+
+df <- botw_otherdata %>%
+  filter(grepl("-", start_end)) %>% 
+  separate(start_end, into = c("segment1", "segment2"), sep = ";", extra = "merge") %>%
+  separate(segment1, into = c("startseg1", "endseg1"), sep = " - ") %>% 
+  separate(segment2, into = c("startseg2", "endseg2"), sep = " - ") %>%
+  select(ep_num, startseg1:endseg2)
+
+
 
 ### IMDB DATA ###
 # fanPath <- "~/R/BestoftheWorst/data/BoTW Spreadsheet V2 .xlsx"

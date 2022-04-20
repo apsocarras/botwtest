@@ -1,0 +1,55 @@
+---
+title: "botw_analviz"
+author: "Alex Socarras"
+date: "3/19/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(magrittr)
+library(ggplot2)
+library(readxl)
+library(readr)
+library(lubridate)
+
+# botw_all2 <- read_xlsx("C:/Users/apsoc/Documents/R/BestoftheWorst/data/botw_all2.xlsx") %>% <--- Laptop path
+
+botw_all2 <- read_xlsx("~/R-Projects/botwtest/data/botw_all2.xlsx") %>%
+  mutate(date = ymd_hms(date), 
+         duration = duration(duration, units = "minutes"), 
+         ep_num = as.factor(ep_num)) %>% 
+  rename(vid_length = duration)
+
+```
+
+## R Markdown
+
+```{r Basic Episode information}
+## From Basic botw_all2 table: 
+# Duration: 
+botw_all2 %>% 
+  filter(!is.na(ep_num)) %>% 
+  ggplot(aes(x = date, y = dhours(vid_length), color = subseries)) + 
+  geom_point() 
+
+```
+
+Observe the outlier in 2015: 
+
+```{r}
+botw_all2 %>% filter(year(date) == "2015") %>% arrange(vid_length) %>% head(1)
+```
+This is actually the second episode, originally created in 2013 but reuploaded in 2015.
+Fortunately, Reddit has the correct date recorded: 02/01/2013
+
+```{r}
+botw_all2[2,3] <- as_datetime("2013-02-01 00:00:00")
+
+```
+
+
+
+
