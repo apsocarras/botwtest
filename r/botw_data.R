@@ -241,7 +241,8 @@ allcap <- as_tibble(read_csv("data/allcaptions2.csv"))
 
 allcap %>% arrange(ep_num) 
 
-### DATE CORRECTIONS ### Previously was date added to playlist, NOT upload date. Just use tuber again
+#### DATE CORRECTIONS (botw_all2.xlsx) #### 
+# Previously was date added to playlist, NOT upload date. Just use tuber again
 # date_check <- character(121)
 # for (i in seq_along(botw_all$pl_order)) {
 # 
@@ -265,14 +266,40 @@ allcap %>% arrange(ep_num)
 # writexl::write_xlsx(botw_all, "data/botw_all2.xlsx")
 
 
+#### Final version: botw_all3.xlsx, botw_otherdata2.xlsx ####
 
+botw_all2 %>% count(ep_num) %>% filter(n == 2) 
+# Ep 27 is a literal two-parter where the first half is basically unrelated to the movie 
+# Ep 63 is a single episode/upload but halfway through it morphs into a spotlight episode for Partners 
+# Going forward it may be easier to list these as separate episodes: 27 & 27.5, 63 & 63.5
 
+botw_all3 <- botw_all2
+botw_all3$ep_num[[33]] <- botw_all3$ep_num[[33]] + .5 
+botw_all3$ep_num[[72]] <- botw_all3$ep_num[[72]] + .5
+
+botw_all3$duration[[32]] <- "42M 54S"
+botw_all3$duration[[33]] <- "43M 40S"
+botw_all3$duration[[71]] <- "31M 45S"
+botw_all3$duration[[72]] <- "38M 0S" # NOTE: this is different from the "start_end" value in botw_otherdata2, 
+# which measures the start/end of discussion on the movie itself. This "duration" 
+# value measures up to the end of the episode itself.  
+
+# writexl::write_xlsx(botw_all3,"data/botw_all3.xlsx")
+
+botw_otherdata[botw_otherdata$movie == "Partners","ep_num"] <- 63.5
+botw_otherdata2 <- rbind(botw_otherdata, botw_otherdata[botw_otherdata$ep_num == 27.0,])
+botw_otherdata2[360,"ep_num"] <- 27.5
+botw_otherdata2[botw_otherdata2$ep_num == 27.0,"start_end"] <- "00:00 - 42:54"
+botw_otherdata2 <- arrange(botw_otherdata2, ep_num) 
+
+# writexl::write_xlsx(botw_otherdata2, "data/botw_otherdata2.xlsx")
+  
 #### Other Data On Episodes ####
 
-botw_otherdata <- readxl::read_xlsx("data/botw_otherdata.xlsx") 
-botw_all2 <- readxl::read_xlsx("data/botw_all2.xlsx")
+botw_otherdata2 <- readxl::read_xlsx("data/botw_otherdata2.xlsx") 
+botw_all3 <- readxl::read_xlsx("data/botw_all3.xlsx")
 
-disc_segment <- botw_otherdata %>%
+disc_segment <- botw_otherdata2 %>%
   filter(grepl("-", start_end)) %>% # removes movies/videos which weren't discussed
   separate(start_end, into = c("segment1", "segment2"), sep = ";", extra = "merge") %>%
   separate(segment1, into = c("startseg1", "endseg1"), sep = " - ") %>% 
@@ -283,11 +310,13 @@ disc_segment <- botw_otherdata %>%
   select(ep_num, movie, startseg1:endseg2) 
 
 disc_interval <- disc_segment %>% 
-  left_join(botw_all2[,c("ep_num","date")]) %>%
+  left_join(botw_all3[,c("ep_num","date")]) %>%
   filter(ep_num < 109) %>% # episode 109 missing from botw_all2.xlsx -- haven't set up sheet to automatically update yet
   mutate(int1 = as.interval(hms(endseg1) - hms(startseg1), start = date + hms(startseg1)), 
-         int2 = as.interval(hms(endseg2) - hms(startseg2), start = date + hms(startseg2))) %>% 
-  select(ep_num, movie, int1:int2)
+         int2 = as.interval(hms(endseg2) - hms(startseg2), start = date + hms(startseg2)), 
+         disc_length = if_else(is.na(int2), int_length(int1), int_length(int1) + int_length(int2))) %>% 
+  select(ep_num, movie, int1:disc_length)
+
 
 
 
