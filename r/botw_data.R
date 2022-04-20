@@ -267,20 +267,27 @@ allcap %>% arrange(ep_num)
 
 
 
-#### Other Episode Data ####
+#### Other Data On Episodes ####
 
 botw_otherdata <- readxl::read_xlsx("data/botw_otherdata.xlsx") 
+botw_all2 <- readxl::read_xlsx("data/botw_all2.xlsx")
 
-
-
-
-
-df <- botw_otherdata %>%
-  filter(grepl("-", start_end)) %>% 
+disc_segment <- botw_otherdata %>%
+  filter(grepl("-", start_end)) %>% # removes movies/videos which weren't discussed
   separate(start_end, into = c("segment1", "segment2"), sep = ";", extra = "merge") %>%
   separate(segment1, into = c("startseg1", "endseg1"), sep = " - ") %>% 
   separate(segment2, into = c("startseg2", "endseg2"), sep = " - ") %>%
-  select(ep_num, startseg1:endseg2)
+  mutate(across(startseg1:endseg2, ~if_else(str_count(.,":") < 2, paste0("00:", .),.))) %>%
+  mutate(across(startseg1:endseg2, ~gsub(" ","",.))) %>% 
+  # left_join(botw_all2[,c("ep_num","date")]) %>% -- make disc_intervals own df
+  select(ep_num, movie, startseg1:endseg2) 
+
+disc_interval <- disc_segment %>% 
+  left_join(botw_all2[,c("ep_num","date")]) %>%
+  filter(ep_num < 109) %>% # episode 109 missing from botw_all2.xlsx -- haven't set up sheet to automatically update yet
+  mutate(int1 = as.interval(hms(endseg1) - hms(startseg1), start = date + hms(startseg1)), 
+         int2 = as.interval(hms(endseg2) - hms(startseg2), start = date + hms(startseg2))) %>% 
+  select(ep_num, movie, int1:int2)
 
 
 
