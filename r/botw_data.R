@@ -333,7 +333,6 @@ disc_interval <- disc_segment %>%
          disc_length = if_else(is.na(int2), int_length(int1), int_length(int1) + int_length(int2))) %>% 
   select(ep_num, movie, int1:disc_length)
 
-df$endseg1[1] - df$startseg1[1]
 
 #### Adding Time Data to Transcripts ####
 
@@ -360,7 +359,7 @@ allcaps3 <- allcaps2 %>%
   arrange(ep_num) 
 
 # write_csv(allcaps3,"data/allcaptions3.csv")
-# read_csv("data/allcaptions3.csv")
+# allcaps3 <- read_csv("data/allcaptions3.csv")
 
 ### Adding time/movie codes to episode 1
 ep1_caps <- allcaps3 %>% filter(ep_num == 1)
@@ -382,20 +381,42 @@ ep1_timecaps <- ep1_caps %>%
 ## Generalize: fewer/more than 3 movies in an episode; missing captions; two intervals given; iterate over all episodes
 
 testcaps <- allcaps3 %>% 
-  filter(ep_num %in% c(1,20,46,56)) %>% # 3 movie standard; two episodes with missing captions; spotlight 
+  filter(ep_num %in% c(1,20,46,56,104)) %>% # 3 movie standard; two episodes with missing captions; spotlight; wheel >3
   left_join(ep_dates, by = c("ep_num")) %>% 
-  mutate(start = date + start)
+  mutate(start = date + start) %>% 
+  select(ep_num:start)
 
 disc_interval <- disc_interval %>%
+    add_count(ep_num) %>% 
     group_by(ep_num) %>%
     mutate(movie_num = row_number())
-
-#### "Slow" left_join method
+ 
+#### Slow left_join method ####
 
 testcaps %>%
-  left_join(disc_interval) %>% 
-  mutate(segment = case_when(start < int_start(int1) ~ ))
+  left_join(disc_interval) %>%
+  mutate(segment = case_when(text == "Transcript Unavailable" ~ "(blank)",
+                           (start < int_start(int1) & movie_num == 1) ~ "intro",
+                           (start > int_end(int1) & movie_num == n) ~ "conclusion",
+                           start %within% int1 ~ movie)) %>% 
+  filter(!is.na(segment)) %>% 
+  select(ep_num, text, start, int1,segment) %>% View()
+  
+# Okay...time to try with whole thing
 
+finalcap <- allcaps3 %>% 
+  left_join(ep_dates, by = c("ep_num")) %>%
+  left_join(select(disc_interval,-c(int2,disc_length))) %>%
+  mutate(start = date + start,
+    segment = case_when(text == "Transcript Unavailable" ~ ".",
+                             (start < int_start(int1) & movie_num == 1) ~ "intro",
+                             (start > int_end(int1) & movie_num == n) ~ "conclusion",
+                             start %within% int1 ~ movie)) %>% 
+  filter(!is.na(segment)) %>% 
+  select(ep_num, text, start, segment) 
+  
+  write_csv(finalcap, "data/captions_final.csv")
+  
 
 
 
