@@ -14,6 +14,8 @@ import csv
 import pandas
 import json
 
+# botw_all_df = pandas.read_excel("C:\\Users\\Alex S\\Documents\\R-Projects\\botwtest\\data\\botw_all3.xlsx") -- if you need to run this again
+
 botw_all_df = pandas.read_csv("data/botw_all.csv", sep = ",")
 ep_ids = botw_all_df.loc[:,["ep_num", "video_id"]].dropna()
 
