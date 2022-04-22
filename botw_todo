@@ -1,7 +1,9 @@
 # TO-DO
 # Expanding Dataset:
-    # add columns: 
-    #   non-panelists, readers/introducers, discussers, spinners, wheel videos, duration of discussion
+      # Done (botw_otherdata2)
+            # add columns: 
+            #   non-panelists, readers/introducers, discussers, spinners, wheel videos, duration of discussion
+    # Add times to captions
     # New data frames:
     #   movie data (imdb links) + data on RLM's entire collection
 # ANALYSIS & VISUALIZATION: 

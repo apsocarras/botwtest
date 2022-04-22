@@ -239,7 +239,7 @@ botw_all <- as_tibble(read_csv("data/botw_all.csv")) %>%
 # 
 allcap <- as_tibble(read_csv("data/allcaptions2.csv"))
 
-allcap %>% arrange(ep_num) 
+
 
 #### DATE CORRECTIONS (botw_all2.xlsx) #### 
 # Previously was date added to playlist, NOT upload date. Just use tuber again
@@ -266,13 +266,13 @@ allcap %>% arrange(ep_num)
 # writexl::write_xlsx(botw_all, "data/botw_all2.xlsx")
 
 
-#### Final version: botw_all3.xlsx, botw_otherdata2.xlsx ####
+#### Final version: botw_all3.xlsx ####
 
 botw_all2 %>% count(ep_num) %>% filter(n == 2) 
-# Ep 27 is a literal two-parter where the first half is basically unrelated to the movie 
+# 1.) Ep 27 is a literal two-parter where the first half is basically unrelated to the movie 
 # Ep 63 is a single episode/upload but halfway through it morphs into a spotlight episode for Partners 
 # Going forward it may be easier to list these as separate episodes: 27 & 27.5, 63 & 63.5
-
+botw_all2 <- readxl::read_xlsx("data/botw_all2.xlsx")
 botw_all3 <- botw_all2
 botw_all3$ep_num[[33]] <- botw_all3$ep_num[[33]] + .5 
 botw_all3$ep_num[[72]] <- botw_all3$ep_num[[72]] + .5
@@ -284,16 +284,32 @@ botw_all3$duration[[72]] <- "38M 0S" # NOTE: this is different from the "start_e
 # which measures the start/end of discussion on the movie itself. This "duration" 
 # value measures up to the end of the episode itself.  
 
-# writexl::write_xlsx(botw_all3,"data/botw_all3.xlsx")
 
+# 2.) As mentioned when analyzing botw_all2 in botw_analviz.rmd, the date for the second episode 
+# is incorrect. Failed to write this edit into the excel file. 
+
+botw_all3[2,3] <- as_datetime("2013-02-01 00:00:00")
+
+#### Final Version: botw_otherdata2.xlsx #####
+# 1.) As previously noted, need to edit two-parter ep_nums
+botw_otherdata <- readxl::read_xlsx("data/botw_otherdata.xlsx")
 botw_otherdata[botw_otherdata$movie == "Partners","ep_num"] <- 63.5
-botw_otherdata2 <- rbind(botw_otherdata, botw_otherdata[botw_otherdata$ep_num == 27.0,])
+botw_otherdata2 <- rbind(botw_otherdata, botw_otherdata[botw_otherdata$ep_num == 27.0,]) # duplicate ep 27 row to make into 27.5
 botw_otherdata2[360,"ep_num"] <- 27.5
 botw_otherdata2[botw_otherdata2$ep_num == 27.0,"start_end"] <- "00:00 - 42:54"
 botw_otherdata2 <- arrange(botw_otherdata2, ep_num) 
 
+#  2.) Missing start_end for episodes 53, 56, 59
+
+botw_otherdata2$start_end[botw_otherdata2$ep_num == 53] <- "00:00 - 29:43"
+botw_otherdata2$start_end[botw_otherdata2$ep_num == 56] <- "00:00 - 38:52"
+botw_otherdata2$start_end[botw_otherdata2$ep_num == 59] <- "00:00 - 39:20"
+
 # writexl::write_xlsx(botw_otherdata2, "data/botw_otherdata2.xlsx")
+# writexl::write_xlsx(botw_all3,"data/botw_all3.xlsx")
   
+
+
 #### Other Data On Episodes ####
 
 botw_otherdata2 <- readxl::read_xlsx("data/botw_otherdata2.xlsx") 
@@ -318,9 +334,135 @@ disc_interval <- disc_segment %>%
   select(ep_num, movie, int1:disc_length)
 
 
+#### Adding Time Data to Transcripts ####
+
+# Plan: Get "start" column from every line of the transcripts, add to "date" column from botw_all3 (by ep_num)
+# If this value falls into one of int1, int2 in disc_interval, assign "movie" column to the line 
+
+allcaps2 <- readr::read_csv("data/allcaptions2.csv")
+
+# First, though, we need to edit episodes 27 and 63 as we did earlier
+
+ep_27 <- allcaps2 %>% filter(ep_num == 27)
+ep_63 <- allcaps2 %>% filter(ep_num == 63)
+
+ep_27[lag(ep_27$start) > ep_27$start,] # start of part 27.5 -- row 936
+
+ep_27.5 <- ep_27[936:1775,] %>% mutate(ep_num = 27.5)
+ep_27 <- ep_27[1:935,]
+ep_63.5 <- ep_63[612:2738,] %>% mutate(ep_num = 63.5)
+ep_63 <- ep_63[1:611,]
+
+allcaps3 <- allcaps2 %>% 
+  filter(!ep_num %in% c(27,63)) %>% 
+  rbind(ep_27, ep_27.5, ep_63, ep_63.5) %>% 
+  arrange(ep_num) 
+
+# write_csv(allcaps3,"data/allcaptions3.csv")
+# read_csv("data/allcaptions3.csv")
+
+### Adding time/movie codes to episode 1
+ep1_caps <- allcaps3 %>% filter(ep_num == 1)
+ep_dates <- botw_all3 %>% select(ep_num, date) 
+
+ep1_disc <- disc_interval %>% filter(ep_num == 1)
 
 
-### IMDB DATA ###
+ep1_timecaps <- ep1_caps %>% 
+  left_join(ep_dates, by = c("ep_num")) %>%
+  # left_join(disc_interval) %>% -- computationally expensive from repeating rows?
+  mutate(start = date + start, 
+         segment = case_when(start < int_start(ep1_disc$int1[[1]]) ~ "intro",  
+                           start %within% ep1_disc$int1[[1]] ~ ep1_disc$movie[[1]],
+                           start %within% ep1_disc$int1[[2]] ~ ep1_disc$movie[[2]],
+                           start %within% ep1_disc$int1[[3]] ~ ep1_disc$movie[[3]],
+                           start > int_end(ep1_disc$int1[[3]]) ~ "conclusion"))
+
+## Generalize: fewer/more than 3 movies in an episode; missing captions; two intervals given; iterate over all episodes
+
+testcaps <- allcaps3 %>% 
+  filter(ep_num %in% c(1,20,46,56)) %>% # 3 movie standard; two episodes with missing captions; spotlight 
+  left_join(ep_dates, by = c("ep_num")) %>% 
+  mutate(start = date + start)
+
+disc_interval <- disc_interval %>%
+    group_by(ep_num) %>%
+    mutate(movie_num = row_number())
+
+#### "Slow" left_join method
+
+testcaps %>%
+  left_join(disc_interval) %>% 
+  mutate(segment = case_when(start < int_start(int1) ~ ))
+
+
+
+
+#### Loop method (Surrender for now)#### 
+
+# We want to add a counter column to disc_interval which will say which order movie a given movie is in an episode
+# This will help us when creating the segment column 
+# 
+# disc_interval <- disc_interval %>%
+#   group_by(ep_num) %>%
+#   mutate(movie_num = row_number())
+# 
+# for (i in seq_along(testcaps$start)) {
+#   
+#   curr_ep <- testcaps$ep_num[[i]]
+#   
+#   movie_orders <- disc_interval$movie_num[disc_interval$ep_num == curr_ep]
+#   
+#   if (testcaps$text[[i]] == "Transcript Unavailable") {
+#     
+#     next
+#     
+#   } else {
+#   
+#       for (movnum in movie_orders) {
+#         
+#         movie1 <- disc_interval[disc_interval$ep_num == curr_ep,][1,]
+#         curr_movie <- disc_interval[disc_interval$ep_num == curr_ep,][movnum,]
+#         
+#         print(curr_movie)
+#         # 
+#         #   if (testcaps$start[[i]] < int_start(movie1$int1)) {
+#         #   
+#         #     testcaps$segment[[i]] <- "intro"
+#         #   
+#         # } else if (testcaps$start[[i]] %within% curr_movie$int1) {
+#         #   
+#         #   testcaps$segment[[i]] <- curr_movie$movie
+#         #   
+#         # } else {
+#         #   testcaps$segment[[i]] <- "conclusion"
+#         # 
+#         #} 
+#       }
+#   }
+# } 
+# 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### IMDB DATA ####
 # fanPath <- "~/R/BestoftheWorst/data/BoTW Spreadsheet V2 .xlsx"
 imdb_links<- tidyxl::xlsx_cells(fanPath, sheets = c(1,2)) %>% # see YouTube Links section for fanPath
   filter(!is.na(formula) & !is.na(character)) %>%
