@@ -415,8 +415,22 @@ finalcap <- allcaps3 %>%
   filter(!is.na(segment)) %>% 
   select(ep_num, text, start, segment) 
   
-  write_csv(finalcap, "data/captions_final.csv")
-  
+  # write_csv(finalcap, "data/captions_final.csv")
+
+## hmmm why is finalcap bigger than allcaptions.csv? repeated rows?
+
+audio_desc <- finalcap[grep("\\[[aA-zZ]+\\]", finalcap$text),] ## want to find repeated rows which aren't just audio descriptions
+
+sus_repeats <- finalcap %>% 
+  filter(!text %in% unique(audio_desc$text)) %>% 
+  group_by(text) %>% 
+  add_count() %>% 
+  filter(n > 1) %>% 
+  ungroup() %>%
+  distinct(text, .keep_all = TRUE) %>% 
+  arrange(desc(stringr::str_length(text))) 
+
+sus_repeats %>% distinct(ep_num, .keep_all = TRUE)  %>% View()
 
 
 
