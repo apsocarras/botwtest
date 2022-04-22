@@ -271,19 +271,23 @@ allcap %>% arrange(ep_num)
 
 botw_otherdata <- readxl::read_xlsx("data/botw_otherdata.xlsx") 
 
-
-
-
-
 df <- botw_otherdata %>%
   filter(grepl("-", start_end)) %>% 
   separate(start_end, into = c("segment1", "segment2"), sep = ";", extra = "merge") %>%
   separate(segment1, into = c("startseg1", "endseg1"), sep = " - ") %>% 
   separate(segment2, into = c("startseg2", "endseg2"), sep = " - ") %>%
-  select(ep_num, startseg1:endseg2)
+  select(ep_num, startseg1:endseg2) %>%
+  mutate(startseg1 = hms(if_else(str_count(startseg1, ":") < 2, paste0("00:",startseg1),startseg1)),
+         startseg2 = hms(if_else(str_count(startseg2, ":") < 2, paste0("00:",startseg2),startseg2)), 
+         endseg1 = hms(if_else(str_count(endseg1, ":") < 2, paste0("00:",endseg1),endseg1)),
+         endseg2 = hms(if_else(str_count(endseg2, ":") < 2, paste0("00:",endseg2),endseg2)))
 
 
+df$endseg1[1] - df$startseg1[1]
 
+class(df$endseg1[1])
+
+View(df)
 ### IMDB DATA ###
 # fanPath <- "~/R/BestoftheWorst/data/BoTW Spreadsheet V2 .xlsx"
 imdb_links<- tidyxl::xlsx_cells(fanPath, sheets = c(1,2)) %>% # see YouTube Links section for fanPath
