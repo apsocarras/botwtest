@@ -419,6 +419,8 @@ finalcap <- allcaps3 %>%
 
 ## hmmm why is finalcap bigger than allcaptions.csv? repeated rows?
 
+discrep <- anti_join(allcaps3[,1:2], finalcap[,1:2])
+
 audio_desc <- finalcap[grep("\\[[aA-zZ]+\\]", finalcap$text),] ## want to find repeated rows which aren't just audio descriptions
 
 sus_repeats <- finalcap %>% 
@@ -427,11 +429,26 @@ sus_repeats <- finalcap %>%
   add_count() %>% 
   filter(n > 1) %>% 
   ungroup() %>%
-  distinct(text, .keep_all = TRUE) %>% 
+  distinct(ep_num, text, .keep_all = TRUE) %>% 
   arrange(desc(stringr::str_length(text))) 
 
-sus_repeats %>% distinct(ep_num, .keep_all = TRUE)  %>% View()
+sus_repeats %>%  
+  distinct(ep_num,text, .keep_all = TRUE)  %>% View()
 
+sus_repeats %>% filter(n == 2)
+
+finalcap %>% filter(ep_num %in% c(63,63.5,93)) ## Culprits
+finalcap %>% distinct(ep_num, segment)
+# For some reason, episode 63 got copied twice into 63.5, and 93 got messed up from Diamond Cobra 
+# taking the place of "intro" segment and then duplicating lines of the episode
+      # Diamond Cobra was mislabeled as Ep 93 in botw_otherdata
+      # Ep 63.5 has same initial "start" value as 63 since 
+allcaps3 %>% filter(ep_num %in% c(63,63.5,93)) # Not present here 
+
+
+
+
+finalcap %>% filter(ep_num %in% c(63,63.5)) %>% View()
 
 
 #### Loop method (Surrender for now)#### 
