@@ -6,6 +6,7 @@ library(stringr)
 library(httr)
 library(readxl)
 library(tidyjson)
+library(roperators)
 
 
 ### API LOG-IN info ### 
@@ -289,6 +290,8 @@ botw_all3$duration[[72]] <- "38M 0S" # NOTE: this is different from the "start_e
 # is incorrect. Failed to write this edit into the excel file. 
 
 botw_all3[2,3] <- as_datetime("2013-02-01 00:00:00")
+# writexl::write_xlsx(botw_all3,"data/botw_all3.xlsx")
+
 
 #### Final Version: botw_otherdata2.xlsx #####
 # 1.) As previously noted, need to edit two-parter ep_nums
@@ -305,9 +308,11 @@ botw_otherdata2$start_end[botw_otherdata2$ep_num == 53] <- "00:00 - 29:43"
 botw_otherdata2$start_end[botw_otherdata2$ep_num == 56] <- "00:00 - 38:52"
 botw_otherdata2$start_end[botw_otherdata2$ep_num == 59] <- "00:00 - 39:20"
 
+# 3.) Correct Diamond Cobra ep_num to 92, not 93 
+
+botw_otherdata2$ep_num[grepl("Diamond",botw_otherdata2$movie)] <- 92
+
 # writexl::write_xlsx(botw_otherdata2, "data/botw_otherdata2.xlsx")
-# writexl::write_xlsx(botw_all3,"data/botw_all3.xlsx")
-  
 
 
 #### Other Data On Episodes ####
@@ -332,6 +337,11 @@ disc_interval <- disc_segment %>%
          int2 = as.interval(hms(endseg2) - hms(startseg2), start = date + hms(startseg2)), 
          disc_length = if_else(is.na(int2), int_length(int1), int_length(int1) + int_length(int2))) %>% 
   select(ep_num, movie, int1:disc_length)
+
+disc_interval <- disc_interval %>%
+  add_count(ep_num) %>% 
+  group_by(ep_num) %>%
+  mutate(movie_num = row_number())
 
 
 #### Adding Time Data to Transcripts ####
@@ -385,11 +395,6 @@ testcaps <- allcaps3 %>%
   left_join(ep_dates, by = c("ep_num")) %>% 
   mutate(start = date + start) %>% 
   select(ep_num:start)
-
-disc_interval <- disc_interval %>%
-    add_count(ep_num) %>% 
-    group_by(ep_num) %>%
-    mutate(movie_num = row_number())
  
 #### Slow left_join method ####
 
@@ -402,53 +407,92 @@ testcaps %>%
   filter(!is.na(segment)) %>% 
   select(ep_num, text, start, int1,segment) %>% View()
   
-# Okay...time to try with whole thing
+## Okay...time to try with whole thing
+## First need to adjust "date" for episode 63.5 -- right now it is the same as the date for episode 63, which will result in
+## duplicating lines that occur in "both" 63 and 63.5
+
+ep_dates <- select(botw_all3,ep_num,date) %>% drop_na()
+ep_dates$date[ep_dates$ep_num == 63.5] %+=% ms(botw_all3$duration[!is.na(botw_all3$ep_num) & botw_all3$ep_num == 63])
 
 finalcap <- allcaps3 %>% 
   left_join(ep_dates, by = c("ep_num")) %>%
   left_join(select(disc_interval,-c(int2,disc_length))) %>%
   mutate(start = date + start,
-    segment = case_when(text == "Transcript Unavailable" ~ ".",
-                             (start < int_start(int1) & movie_num == 1) ~ "intro",
-                             (start > int_end(int1) & movie_num == n) ~ "conclusion",
-                             start %within% int1 ~ movie)) %>% 
-  filter(!is.na(segment)) %>% 
+  segment = case_when(text == "Transcript Unavailable" ~ ".",
+                           (start < int_start(int1) & movie_num == 1) ~ "intro",
+                           (start > int_end(int1) & movie_num == n) ~ "conclusion",
+                           start %within% int1 ~ movie)) %>%
+  filter(!is.na(segment)) %>%
   select(ep_num, text, start, segment) 
   
   # write_csv(finalcap, "data/captions_final.csv")
 
+#### OLD Mistake####
 ## hmmm why is finalcap bigger than allcaptions.csv? repeated rows?
 
-discrep <- anti_join(allcaps3[,1:2], finalcap[,1:2])
+# discrep <- anti_join(allcaps3[,1:2], finalcap[,1:2])
+# 
+# audio_desc <- finalcap[grep("\\[[aA-zZ]+\\]", finalcap$text),] ## want to find repeated rows which aren't just audio descriptions
+# 
+# sus_repeats <- finalcap %>% 
+#   filter(!text %in% unique(audio_desc$text)) %>% 
+#   group_by(text) %>% 
+#   add_count() %>% 
+#   filter(n > 1) %>% 
+#   ungroup() %>%
+#   distinct(ep_num, text, .keep_all = TRUE) %>% 
+#   arrange(desc(stringr::str_length(text))) 
+# 
+# sus_repeats %>%  
+#   distinct(ep_num,text, .keep_all = TRUE)  %>% View()
+# 
+# sus_repeats %>% filter(n == 2)
+# 
+# finalcap %>% filter(ep_num %in% c(63,63.5,93)) ## Culprits
+# finalcap %>% distinct(ep_num, segment)
+# # For some reason, episode 63 got copied twice into 63.5, and 93 got messed up from Diamond Cobra 
+# # taking the place of "intro" segment and then duplicating lines of the episode
+#       # Diamond Cobra was mislabeled as Ep 93 in botw_otherdata
+#       # Ep 63.5 has same initial "start" value as 63 since 
+# allcaps3 %>% filter(ep_num %in% c(63,63.5,93)) # Not present here 
+# 
 
-audio_desc <- finalcap[grep("\\[[aA-zZ]+\\]", finalcap$text),] ## want to find repeated rows which aren't just audio descriptions
 
-sus_repeats <- finalcap %>% 
-  filter(!text %in% unique(audio_desc$text)) %>% 
-  group_by(text) %>% 
-  add_count() %>% 
-  filter(n > 1) %>% 
-  ungroup() %>%
-  distinct(ep_num, text, .keep_all = TRUE) %>% 
-  arrange(desc(stringr::str_length(text))) 
+#### Now finalcap is *smaller* than allcaps3 ####
 
-sus_repeats %>%  
-  distinct(ep_num,text, .keep_all = TRUE)  %>% View()
+caprownums <- allcaps3[,1:2] %>% mutate(row = row_number())
 
-sus_repeats %>% filter(n == 2)
+capswithna <- allcaps3 %>% 
+  left_join(ep_dates, by = c("ep_num")) %>%
+  left_join(select(disc_interval,-c(int2,disc_length))) %>%
+  mutate(start = date + start,
+         segment = case_when(text == "Transcript Unavailable" ~ ".",
+                             (start < int_start(int1) & movie_num == 1) ~ "intro",
+                             (start > int_end(int1) & movie_num == n) ~ "conclusion",
+                             start %within% int1 ~ movie)) %>%
+  # filter(!is.na(segment)) %>%
+  select(ep_num, text, start, movie, int1, segment) 
 
-finalcap %>% filter(ep_num %in% c(63,63.5,93)) ## Culprits
-finalcap %>% distinct(ep_num, segment)
-# For some reason, episode 63 got copied twice into 63.5, and 93 got messed up from Diamond Cobra 
-# taking the place of "intro" segment and then duplicating lines of the episode
-      # Diamond Cobra was mislabeled as Ep 93 in botw_otherdata
-      # Ep 63.5 has same initial "start" value as 63 since 
-allcaps3 %>% filter(ep_num %in% c(63,63.5,93)) # Not present here 
+missing_lines <- anti_join(caprownums,finalcap[,1:2])
+
+missing_lines <- inner_join(missing_lines[,1:2], capswithna) %>% 
+  mutate(gap = round(int_start(int1) - start)) %>% 
+  filter(abs(gap) < 30)
+
+## Missing rows occur from "gaps" in the assigned intervals in botw_otherdata2. Idea: subtract "start" from int_start of each int1, assign based 
+## on smallest different 
 
 
 
 
-finalcap %>% filter(ep_num %in% c(63,63.5)) %>% View()
+
+
+
+
+
+
+
+
 
 
 #### Loop method (Surrender for now)#### 
