@@ -312,6 +312,11 @@ botw_otherdata2$start_end[botw_otherdata2$ep_num == 59] <- "00:00 - 39:20"
 
 botw_otherdata2$ep_num[grepl("Diamond",botw_otherdata2$movie)] <- 92
 
+# 4.) Add start_end for ep. 82 
+
+botw_otherdata2[botw_otherdata2$ep_num == 82, "start_end"] <- "00:00 - 33:15"
+
+
 # writexl::write_xlsx(botw_otherdata2, "data/botw_otherdata2.xlsx")
 
 
@@ -460,31 +465,35 @@ finalcap <- allcaps3 %>%
 
 #### Now finalcap is *smaller* than allcaps3 ####
 
-caprownums <- allcaps3[,1:2] %>% mutate(row = row_number())
+# caprownums <- allcaps3[,1:2] %>% mutate(row = row_number())
+# 
+# capswithna <- allcaps3 %>%
+#   left_join(ep_dates, by = c("ep_num")) %>%
+#   left_join(select(disc_interval,-c(int2,disc_length))) %>%
+#   mutate(start = date + start,
+#          segment = case_when(text == "Transcript Unavailable" ~ ".",
+#                              (start < int_start(int1) & movie_num == 1) ~ "intro",
+#                              (start > int_end(int1) & movie_num == n) ~ "conclusion",
+#                              start %within% int1 ~ movie)) %>%
+#   # filter(!is.na(segment)) %>%
+#   select(ep_num, text, start, movie, int1, segment)
 
-capswithna <- allcaps3 %>% 
-  left_join(ep_dates, by = c("ep_num")) %>%
-  left_join(select(disc_interval,-c(int2,disc_length))) %>%
-  mutate(start = date + start,
-         segment = case_when(text == "Transcript Unavailable" ~ ".",
-                             (start < int_start(int1) & movie_num == 1) ~ "intro",
-                             (start > int_end(int1) & movie_num == n) ~ "conclusion",
-                             start %within% int1 ~ movie)) %>%
-  # filter(!is.na(segment)) %>%
-  select(ep_num, text, start, movie, int1, segment) 
-
-missing_lines <- anti_join(caprownums,finalcap[,1:2])
-
-missing_lines <- inner_join(missing_lines[,1:2], capswithna) %>% 
-  mutate(gap = round(int_start(int1) - start)) %>% 
-  filter(abs(gap) < 30)
-
-## Missing rows occur from "gaps" in the assigned intervals in botw_otherdata2. Idea: subtract "start" from int_start of each int1, assign based 
-## on smallest different 
+missing_ep <- anti_join(allcaps3[,"ep_num"],finalcap[,"ep_num"]) # disc_segment, disc_interval missing ep 82, due to "start" column in botw_otherdata2    
 
 
+# missing_lines <- anti_join(caprownums,finalcap[,1:2]) # 
+missing_lines <- anti_join(allcaps3[,1:2],finalcap[,1:2]) # These two are now the same with ep 82 added -- they are "being lost" "filter(!is.na(segment))"
 
+inner_join(missing_lines, capswithna)
 
+missing_lines <- inner_join(missing_lines[,1:2], capswithna) %>%
+  mutate(gap = abs(round(int_start(int1) - start))) %>%
+  group_by(start) %>%
+  mutate(mingap = min(gap))
+
+min_missing <- missing_lines %>% filter(gap == mingap) %>% mutate(segment = movie) %>% select(ep_num:start, segment)
+
+# What if we made "gap intervals" and included them in the case_when for finalcap
 
 
 
