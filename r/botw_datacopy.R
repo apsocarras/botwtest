@@ -9,7 +9,7 @@ library(tidyjson)
 library(roperators)
 
 
-### API LOG-IN info ### 
+#### API LOG-IN info #### 
 #Web Client ID: 750567258427-2msp8ndrkiiumuv5i40ni76cai7129dd.apps.googleusercontent.com
 #Web Client Secret: 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
 #Desktop Client ID: 750567258427-tf07hsleu2ov7sp6fcp538cg7itkg7ii.apps.googleusercontent.com
@@ -17,7 +17,7 @@ library(roperators)
 
 client_id <- "750567258427-tf07hsleu2ov7sp6fcp538cg7itkg7ii.apps.googleusercontent.com"
 client_secret <- "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"
-  
+
 yt_oauth(
   app_id = client_id, 
   app_secret = client_secret,
@@ -25,162 +25,155 @@ yt_oauth(
 
 #### USING TUBER + REDDIT SHEET to create botw_all.csv -- info on episodes ####
 
-# botw_playlist_id <- str_split(
-#   string = "https://www.youtube.com/playlist?list=PLJ_TJFLc25JR3VZ7Xe-cmt4k3bMKBZ5Tm", 
-#   pattern = "=",
-#   n = 2, simplify = TRUE)[,2]
-# 
-# botw1_raw <- get_playlist_items(filter = 
-#            c(playlist_id = botw_playlist_id),
-#            part = "snippet",
-#            max_results = 100,
-#            page_token = "EAAaBlBUOkNESQ",
-#            simplify = TRUE)                 # There was an issue trying to get all 150 playlist items in one call
-# 
-# botw2_raw <- get_playlist_items(filter = 
-#           c(playlist_id = botw_playlist_id),
-#           part = "snippet",
-#           max_results = 50,
-#           simplify = FALSE)                 # Why did this have to be FALSE? I remember there was a reason but forget what
-# 
-# 
-# botw1_tib <- botw1_raw %>% select(date = snippet.publishedAt, 
-#     title = snippet.title, 
-#     description = snippet.description, 
-#     video_id = snippet.resourceId.videoId) %>%
-#     rowid_to_column("pl_order") %>%
-#     mutate(pl_order = rev(as.integer(pl_order))) %>% 
-#     arrange(pl_order)
-# 
-# botw2_list <- list()
-#   
-# for (j in c(1:50)) {
-#   info <- botw2_raw[["items"]][[j]]$snippet[c("publishedAt", "title", "description", "resourceId")]
-#   botw2_list[[j]] <- info
-# }
-# 
-# 
-# botw2_tib <- as_tibble(botw2_list, .name_repair = "universal") %>%
-#   rename_with(~ gsub("...", "",.x)) %>% 
-#   mutate(categories = c("date","title","description","resource")) %>%
-#   select(categories,1:50) %>% 
-#   pivot_longer(names_to = "pl_order", cols = c(2:51)) %>%
-#   mutate(pl_order = rev(as.integer(pl_order)) + 70) %>% 
-#   pivot_wider(names_from = categories) %>% 
-#   unnest(cols = 2:5) %>% 
-#   filter(!grepl("youtube#", resource)) %>%
-#   mutate(video_id = as.character(resource), .keep = c("unused"), 
-#          title = replace(title, title == "Deleted video", 
-#             "Best of the Worst: Diamond Cobra vs the White Fox")) %>% 
-#   arrange(pl_order)
-# 
-# 
-# botw_tib <- full_join(botw1_tib,botw2_tib) %>%
-#   mutate(ep_num = 0, subseries = "", holiday = "")
-#      
-# non_episodes <- botw_tib %>% 
-#   filter(!grepl("Best of the Worst(:| Episode| Spotlight)", title))
-# 
-# episodes <- botw_tib %>% 
-#   filter(!title %in% non_episodes$title) %>% 
-#   mutate(ep_num = row_number())
-# 
-# botw <- full_join(non_episodes, episodes) %>% 
-#   mutate(ep_num = ifelse(ep_num == 0, NA,ep_num)) %>%
-#          arrange(pl_order) %>%
-#   select(pl_order,ep_num, date:holiday)
-# 
-# #for adjusting subseries
-# spotlight_other <- c(27,28,57,60,83,93,96)
-# main_other <- c(1,18,74,87)
-# random_other <- c(37,48,62,74,91,108,109)
-# 
-# botw <- botw %>% 
-#   mutate (subseries = case_when(
-#         is.na(ep_num) ~ "extras",
-#         grepl(",", title) ~ "main",
-#         ep_num == 64 ~ "bl_spine, spotlight",
-#         grepl("[Ww]heel",description) | grepl("[Ww]heel", title) ~ "wheel",
-#         grepl("[Ss]pine", description) | grepl("[Ss]pine", title) ~ "bl_spine",
-#         grepl("([Pp]linketto | ball)", description) | grepl("[Pp]linketto", title) ~ "plinketto",
-#         grepl("[Ss]potlight", description) | grepl("[Ss]potlight", title) ~ "spotlight",
-#         ep_num %in% spotlight_other ~ "spotlight",
-#         ep_num %in% main_other ~ "main",
-#         ep_num %in% random_other ~ "random_other", 
-#         ep_num == 97 ~ "bl_spine",
-#         ep_num == 106 ~ "main"))
-# 
-# 
-# # ERROR: SWHS Two-Part episode was counted as two separate episodes. 
-#  botw <- botw %>% 
-#      mutate(ep_num = case_when(ep_num < 28 ~ ep_num, 
-#                           ep_num >= 28 ~ ep_num-1))
-#  
-#  # other columns 
-#  
-# botw <- botw %>% 
-#    mutate(holiday = case_when(grepl("(Christmas| Holiday |-mas)", title) ~ "christmas",
-#                               grepl("Halloween", description) & subseries != "wheel" ~ "halloween", 
-#                               grepl("Hollywood Cop", title) ~ "tums festival", 
-#                               is.na(holiday) ~ "none"), 
-#           date = as_datetime(date))
-# 
-# fanPath <- "~/R/BestoftheWorst/data/BoTW Spreadsheet V2 .xlsx"
-# 
-# get_duration <- function(time) { # remove junk ymd data from length column 
-#   time %>% 
-#     str_split(" ") %>%
-#     map_chr(2) %>% 
-#     lubridate::hms() 
-#   } # we'll need this for the next two sheets
-# 
-# 
-# fansheet_1 <- Filter(function(x)!all(is.na(x)), 
-#                      read_excel(fanPath, sheet = 1, col_names = TRUE))[,1:23]
-# for (i in c(8:15)) {
-#   fansheet_1[[i]] <- case_when(grepl("✓", fansheet_1[[i]]) ~ names(fansheet_1)[[i]], 
-#                                grepl("X", fansheet_1[[i]]) ~ "", 
-#                                TRUE ~ fansheet_1[[i]]) } # TRUE is the else condition
-# 
-# fansheet_2 <- Filter(function(x)!all(is.na(x)), 
-#                      read_excel(fanPath, sheet = 2, col_names = TRUE))
-#   for (i in c(3:8)) {
-#       fansheet_2[[i]] <- case_when(grepl("✓", fansheet_2[[i]]) ~ names(fansheet_2)[[i]], 
-#                                grepl("X", fansheet_2[[i]]) ~ "", 
-#                                TRUE ~ fansheet_2[[i]]) } 
-# 
-# main_eps <- fansheet_1 %>% 
-#   rename_all(tolower) %>% 
-#   rename(theme = `theme / gimmick`, best = `best of the worst`, 
-#          worst = `worst of the worst`, destruction_method = `method of destruction`,
-#          date = `date released`) %>% 
-#   unite("films", 2:5, sep = ", ", remove = TRUE, na.rm = TRUE) %>% 
-#   unite("panelists", mike:guests, sep = " ", remove = TRUE, na.rm = TRUE) %>% 
-#   mutate(panelists = str_squish(str_remove_all(panelists, "from Canada|&")),
-#          duration = get_duration(length),
-#          unanimous = case_when(grepl("✓", `unanimous win`) ~ "yes", 
-#                                grepl("X", `unanimous win`) ~ "no", 
-#                                TRUE ~ `unanimous win`)) %>%
-#   select(episode, date, duration, films:best, unanimous, worst:destruction_method, 
-#          -`youtube links`, -`# gimmik`)
-#     
-# spotlight_eps <- fansheet_2 %>% 
-#   rename_all(tolower) %>%
-#   unite("panelists", mike:guests, sep = " ") %>% 
-#   mutate(theme = "spotlight",
-#          panelists = str_squish(str_remove_all(panelists, "from Canada")), 
-#          duration = get_duration(length), 
-#          date = `date released`,
-#          films = film) %>% 
-#  select(episode, date, duration, films, theme, panelists, editor)
-# 
-# all_eps <- full_join(main_eps, spotlight_eps) %>% 
-#   mutate(date = as_datetime(date)) %>%
-#   rename(ep_num = episode) %>% 
-#   arrange(ep_num) 
-# 
-# botw_all <- full_join(botw, all_eps %>% select(-date), by = c("ep_num")) %>% 
-#   mutate(link = paste("https://www.youtube.com/watch?v=", video_id, sep = "")) 
+play_id <- str_split(
+  string = "https://www.youtube.com/playlist?list=PLJ_TJFLc25JR3VZ7Xe-cmt4k3bMKBZ5Tm",
+  pattern = "=",
+  n = 2, simplify = TRUE)[,2]
+
+scrape1 <- get_playlist_items(filter =
+           c(playlist_id = play_id),
+           part = "snippet",
+           max_results = 100,
+           page_token = "EAAaBlBUOkNESQ",
+           simplify = TRUE)                 # There was an issue trying to get all 150 playlist items in one call
+
+scrape2 <- get_playlist_items(filter =
+          c(playlist_id = play_id),
+          part = "snippet",
+          max_results = 50,
+          simplify = FALSE)                 
+
+scrape1.df <- scrape1 %>% 
+  select(date = snippet.publishedAt,
+    title = snippet.title,
+    description = snippet.description,
+    video_id = snippet.resourceId.videoId) %>% 
+    rowid_to_column("pl_order") %>% 
+    mutate(pl_order = rev(as.integer(pl_order))) %>%
+    arrange(pl_order)
+
+scrape2.ls <- list()
+
+for (j in c(1:50)) {
+  info <- scrape2[["items"]][[j]]$snippet[c("publishedAt", "title", "description", "resourceId")]
+  scrape2.ls[[j]] <- info
+}
+
+scrape2.df <- as_tibble(scrape2.ls, .name_repair = "universal") %>%
+  rename_with(~ gsub("...", "",.x)) %>%
+  mutate(categories = c("date","title","description","resource")) %>%
+  select(categories,1:50) %>%
+  pivot_longer(names_to = "pl_order", cols = c(2:51)) %>%
+  mutate(pl_order = rev(as.integer(pl_order)) + nrow(scrape1.df)) %>%
+  pivot_wider(names_from = categories) %>%
+  unnest(cols = 2:5) %>%
+  filter(!grepl("youtube#", resource)) %>%
+  mutate(video_id = as.character(resource), .keep = c("unused"),
+         title = replace(title, title == "Deleted video",
+            "Best of the Worst: Diamond Cobra vs the White Fox")) %>%
+  arrange(pl_order)
+
+episodes <- full_join(scrape1.df,scrape2.df) %>%
+  filter(grepl("Best of the Worst(:| Episode| Spotlight)",title)) %>% # filter(!title %in% non_episodes$title) %>%
+  mutate(ep_num = as.numeric(row_number()))
+
+non_episodes <- full_join(scrape1.df,scrape2.df) %>%
+  filter(!grepl("Best of the Worst(:| Episode| Spotlight)",title))
+
+botw.df <- full_join(non_episodes, episodes) %>%
+  arrange(pl_order) %>%
+  mutate(ep_num = case_when(ep_num == 28 ~ 27.5,
+                            ep_num > 28 ~ ep_num - 1,
+                            TRUE ~ ep_num)) %>%
+  select(pl_order, ep_num,title, date,description, video_id) 
+          
+          ep_63.5 <- filter(botw.df,ep_num == 63) %>% 
+            mutate(ep_num = 63.5, title = "Best of the Worst Spotlight: Partners")
+          
+botw.df <- rbind(botw.df,ep_63.5) %>% arrange(pl_order)
+
+#### SUBSERIES & HOLIDAYS ####
+spotlight_other <- c(27,27.5,56,59,82,92,95)
+main_other <- c(1,18,73,86,105)
+random_other <- c(36,61,73,90,107,108)
+
+botw.df <- botw.df %>%
+  mutate (subseries = case_when(
+            is.na(ep_num) ~ "extras",
+            grepl(",", title) ~ "main",
+            grepl("[Ww]heel",description) | grepl("[Ww]heel", title) ~ "wheel",
+            grepl("[Ss]pine", description) | grepl("[Ss]pine", title) ~ "bl_spine",
+            grepl("([Pp]linketto | ball)", description) | grepl("[Pp]linketto", title) ~ "plinketto",
+            grepl("[Ss]potlight", description) | grepl("[Ss]potlight", title) ~ "spotlight",
+            ep_num %in% spotlight_other ~ "spotlight",
+            ep_num %in% main_other ~ "main",
+            ep_num %in% random_other ~ "random_other",
+            ep_num == 96 ~ "bl_spine"),
+        holiday = case_when(
+          grepl("(Christmas| Holiday |-mas)", title) ~ "christmas",
+          grepl("Halloween", description) & subseries != "wheel" ~ "halloween",
+          grepl("Hollywood Cop", title) ~ "tums festival",
+          TRUE ~ "none"),
+          date = as_datetime(date))
+
+#### "Reddit" Data #### 
+
+fanPath <- "~/R/BestoftheWorst/data/BoTW Spreadsheet V2 .xlsx"
+
+get_duration <- function(time) { # remove junk ymd data from length column
+  time %>%
+    str_split(" ") %>%
+    map_chr(2) %>%
+    lubridate::hms()
+  } # we'll need this for the next two sheets
+
+
+fansheet_1 <- Filter(function(x)!all(is.na(x)),
+                     read_excel(fanPath, sheet = 1, col_names = TRUE))[,1:23]
+for (i in c(8:15)) {
+  fansheet_1[[i]] <- case_when(grepl("✓", fansheet_1[[i]]) ~ names(fansheet_1)[[i]],
+                               grepl("X", fansheet_1[[i]]) ~ "",
+                               TRUE ~ fansheet_1[[i]]) } # TRUE is the else condition
+
+fansheet_2 <- Filter(function(x)!all(is.na(x)),
+                     read_excel(fanPath, sheet = 2, col_names = TRUE))
+  for (i in c(3:8)) {
+      fansheet_2[[i]] <- case_when(grepl("✓", fansheet_2[[i]]) ~ names(fansheet_2)[[i]],
+                               grepl("X", fansheet_2[[i]]) ~ "",
+                               TRUE ~ fansheet_2[[i]]) }
+
+main_eps <- fansheet_1 %>%
+  rename_all(tolower) %>%
+  rename(theme = `theme / gimmick`, best = `best of the worst`,
+         worst = `worst of the worst`, destruction_method = `method of destruction`,
+         date = `date released`) %>%
+  unite("films", 2:5, sep = ", ", remove = TRUE, na.rm = TRUE) %>%
+  unite("panelists", mike:guests, sep = " ", remove = TRUE, na.rm = TRUE) %>%
+  mutate(panelists = str_squish(str_remove_all(panelists, "from Canada|&")),
+         duration = get_duration(length),
+         unanimous = case_when(grepl("✓", `unanimous win`) ~ "yes",
+                               grepl("X", `unanimous win`) ~ "no",
+                               TRUE ~ `unanimous win`)) %>%
+  select(episode, date, duration, films:best, unanimous, worst:destruction_method,
+         -`youtube links`, -`# gimmik`)
+
+spotlight_eps <- fansheet_2 %>%
+  rename_all(tolower) %>%
+  unite("panelists", mike:guests, sep = " ") %>%
+  mutate(theme = "spotlight",
+         panelists = str_squish(str_remove_all(panelists, "from Canada")),
+         duration = get_duration(length),
+         date = `date released`,
+         films = film) %>%
+ select(episode, date, duration, films, theme, panelists, editor)
+
+all_eps <- full_join(main_eps, spotlight_eps) %>%
+  mutate(date = as_datetime(date)) %>%
+  rename(ep_num = episode) %>%
+  arrange(ep_num)
+
+botw_all <- full_join(botw, all_eps %>% select(-date), by = c("ep_num")) %>%
+  mutate(link = paste("https://www.youtube.com/watch?v=", video_id, sep = ""))
 
 botw_all <- as_tibble(read_csv("data/botw_all.csv")) %>% 
   mutate(date = mdy_hm(date))
@@ -368,10 +361,10 @@ ep1_timecaps <- ep1_caps %>%
   # left_join(disc_interval) %>% -- computationally expensive from repeating rows?
   mutate(start = date + start, 
          segment = case_when(start < int_start(ep1_disc$int1[[1]]) ~ "intro",  
-                           start %within% ep1_disc$int1[[1]] ~ ep1_disc$movie[[1]],
-                           start %within% ep1_disc$int1[[2]] ~ ep1_disc$movie[[2]],
-                           start %within% ep1_disc$int1[[3]] ~ ep1_disc$movie[[3]],
-                           start > int_end(ep1_disc$int1[[3]]) ~ "conclusion"))
+                             start %within% ep1_disc$int1[[1]] ~ ep1_disc$movie[[1]],
+                             start %within% ep1_disc$int1[[2]] ~ ep1_disc$movie[[2]],
+                             start %within% ep1_disc$int1[[3]] ~ ep1_disc$movie[[3]],
+                             start > int_end(ep1_disc$int1[[3]]) ~ "conclusion"))
 
 ## Generalize: fewer/more than 3 movies in an episode; missing captions; two intervals given; iterate over all episodes
 
@@ -380,18 +373,18 @@ testcaps <- allcaps3 %>%
   left_join(ep_dates, by = c("ep_num")) %>% 
   mutate(start = date + start) %>% 
   select(ep_num:start)
- 
+
 #### Slow left_join method ####
 
 testcaps %>%
   left_join(disc_interval) %>%
   mutate(segment = case_when(text == "Transcript Unavailable" ~ "(blank)",
-                           (start < int_start(int1) & movie_num == 1) ~ "intro",
-                           (start > int_end(int1) & movie_num == n) ~ "conclusion",
-                           start %within% int1 ~ movie)) %>% 
+                             (start < int_start(int1) & movie_num == 1) ~ "intro",
+                             (start > int_end(int1) & movie_num == n) ~ "conclusion",
+                             start %within% int1 ~ movie)) %>% 
   filter(!is.na(segment)) %>% 
   select(ep_num, text, start, int1,segment) %>% View()
-  
+
 ## Okay...time to try with whole thing
 ## First need to adjust "date" for episode 63.5 -- right now it is the same as the date for episode 63, which will result in
 ## duplicating lines that occur in "both" 63 and 63.5
@@ -403,14 +396,14 @@ finalcap <- allcaps3 %>%
   left_join(ep_dates, by = c("ep_num")) %>%
   left_join(select(disc_interval,-c(int2,disc_length))) %>%
   mutate(start = date + start,
-  segment = case_when(text == "Transcript Unavailable" ~ ".",
-                           (start < int_start(int1) & movie_num == 1) ~ "intro",
-                           (start > int_end(int1) & movie_num == n) ~ "conclusion",
-                           start %within% int1 ~ movie)) %>%
+         segment = case_when(text == "Transcript Unavailable" ~ ".",
+                             (start < int_start(int1) & movie_num == 1) ~ "intro",
+                             (start > int_end(int1) & movie_num == n) ~ "conclusion",
+                             start %within% int1 ~ movie)) %>%
   filter(!is.na(segment)) %>%
   select(ep_num, text, start, segment) 
-  
-  # write_csv(finalcap, "data/captions_final.csv")
+
+# write_csv(finalcap, "data/captions_final.csv")
 
 #### OLD Mistake####
 ## hmmm why is finalcap bigger than allcaptions.csv? repeated rows?
