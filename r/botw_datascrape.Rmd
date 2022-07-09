@@ -1,0 +1,246 @@
+---
+title: "Scraping Data with Tuber"
+output: html_document
+date: '2022-07-06'
+---
+
+```{r import}
+library(tuber)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(readxl)
+library(here)
+```
+
+In this project we will use the following R & Python packages to obtain video metadata and transcripts from RedLetterMedia's [*Best of the Worst*](https://www.youtube.com/playlist?list=PLJ_TJFLc25JR3VZ7Xe-cmt4k3bMKBZ5Tm) YouTube series: 
+
+|   tuber -- obtain video metadata from playlist
+|   YoutubeTranscriptApi -- obtain video transcripts
+
+# Obtaining Video Metadata:
+
+```{r API authorization}
+
+client_id <- "750567258427-tf07hsleu2ov7sp6fcp538cg7itkg7ii.apps.googleusercontent.com"
+client_secret <- "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"
+
+yt_oauth(
+  app_id = client_id, 
+  app_secret = client_secret,
+  token = '')
+
+play_id <- stringr::str_split(
+  string = "https://www.youtube.com/playlist?list=PLJ_TJFLc25JR3VZ7Xe-cmt4k3bMKBZ5Tm",
+  pattern = "=",
+  n = 2, simplify = TRUE)[,2]
+
+```
+
+For `r tuber::get_playlist_items()`, Google limits our API calls to accessing a maximum of 50 videos at a time. We can circumvent this for the first call by specifying the 'pageToken' value for the first half of the playlist (i.e. the first 73 uploads): 
+
+```{r get_playlist_items}
+page1 <- get_playlist_items(filter =
+           c(playlist_id = play_id),
+           part = "snippet",
+           max_results = 100, # given to override the default value of 50
+           page_token = "EAAaBlBUOkNESQ", 
+           simplify = TRUE)    
+
+page2 <- get_playlist_items(filter =
+          c(playlist_id = play_id),
+          part = "snippet",
+          max_results = 100, 
+          simplify = FALSE)
+```
+
+For some reason, the [YouTubeApi](https://developers.google.com/youtube/v3/guides/implementation/pagination) allows queries to access tokens for the next page (`nextPageToken`) or previous page (`prevPageToken`) of a given set of results, but not the current page. Fortunately, we can still see our desired page token "EAAaBlBUOkNESQ" in the unsimplified output above (`r page2$nextPageToken`). Note that it's listed under `nextPageToken`: the first page in a YouTube [`playlistItem`](https://developers.google.com/youtube/v3/docs/playlistItems) object is the most recent set of uploads rather than the earliest. 
+
+Next we process and combine both pages of our results into a single dataframe, showing cleaning methods for both the simplified and unsimplified output of `r tuber::get_playlist_items()`:
+
+```{r }
+# Simplified Output:
+page1.df <- page1 %>% 
+  select(date = snippet.publishedAt,
+    title = snippet.title,
+    description = snippet.description,
+    video_id = snippet.resourceId.videoId) %>% 
+    rowid_to_column("pl_order") %>% 
+    mutate(pl_order = rev(as.integer(pl_order))) %>%
+    arrange(pl_order)
+
+# Unsimplified Output:
+page2.ls <- list()
+
+for (j in c(1:50)) {
+  info <- page2[["items"]][[j]]$snippet[c("publishedAt", "title", "description", "resourceId")]
+  page2.ls[[j]] <- info
+}
+
+page2.df <- as_tibble(page2.ls, .name_repair = "universal") %>%
+  rename_with(~ gsub("...", "",.x)) %>%
+  mutate(categories = c("date","title","description","resource")) %>%
+  select(categories,1:50) %>%
+  pivot_longer(names_to = "pl_order", cols = c(2:51)) %>%
+  mutate(pl_order = rev(as.integer(pl_order)) + nrow(scrape1.df)) %>%
+  pivot_wider(names_from = categories) %>%
+  unnest(cols = 2:5) %>%
+  filter(!grepl("youtube#", resource)) %>%
+  mutate(video_id = as.character(resource), .keep = c("unused"),
+         title = replace(title, title == "Deleted video",
+            "Best of the Worst: Diamond Cobra vs the White Fox")) %>% # removed due to copyright strike
+  arrange(pl_order)
+
+```
+
+The original playlist contains video extras which are not actual episodes in *Best of the Worst.* We will want to distinguish these two groups of videos for our analysis later on. Below is an easy (if inelegant) method of adding episode numbers to only those videos in the series itself:
+
+```{r}
+episodes <- full_join(page1.df, page2.df) %>% 
+  filter(grepl("Best of the Worst(:| Episode| Spotlight)",title)) %>% 
+  mutate(ep_num = as.numeric(row_number())) 
+
+non_episodes <- full_join(page1.df, page2.df) %>%
+    filter(!grepl("Best of the Worst(:| Episode| Spotlight)",title))
+
+botw.df <- full_join(non_episodes, episodes) %>% 
+  arrange(pl_order) %>%
+  select(pl_order,ep_num, title, date, description, video_id)
+```
+
+There are two episodes we need to modify separately:
+|   Episode 27 was uploaded in two separate parts 
+|   Episode 63 contains an additional "surprise" episode
+
+We will code these special cases as "half" episodes:
+
+```{r episode 27}
+botw.df <- botw.df %>% mutate(ep_num = case_when(ep_num == 28 ~ 27.5,
+                            ep_num > 28 ~ ep_num - 1,
+                            TRUE ~ ep_num)) # leaves earlier ep_nums unchanged
+
+ep_63.5 <- botw.df %>% filter(ep_num == 63) %>% 
+            mutate(ep_num = 63.5, title = "Best of the Worst Spotlight: Partners")
+
+botw.df <- rbind(botw.df,ep_63.5) %>% arrange(pl_order)
+
+```
+
+
+For many of the videos in our playlist, we can use the title and description to identify the associated subseries and holiday (where applicable). Unfortunately, we have to code the same information manually for the rest: 
+
+```{r}
+# Manual codings -- these episodes lacked the relevant information in their titles and videos
+spotlight_other <- c(27,27.5,56,59,82,92,95)
+main_other <- c(1,18,73,86,105)
+random_other <- c(36,61,73,90,107,108)
+
+
+botw.df <- botw.df %>%
+  mutate (subseries = case_when(
+            is.na(ep_num) ~ "extras",
+            grepl(",", title) ~ "main", # only main series episodes have multiple movies in their titles
+            grepl("[Ww]heel",description) | grepl("[Ww]heel", title) ~ "wheel",
+            grepl("[Ss]pine", description) | grepl("[Ss]pine", title) ~ "bl_spine",
+            grepl("([Pp]linketto | ball)", description) | grepl("[Pp]linketto", title) ~ "plinketto",
+            grepl("[Ss]potlight", description) | grepl("[Ss]potlight", title) ~ "spotlight",
+            ep_num %in% spotlight_other ~ "spotlight",
+            ep_num %in% main_other ~ "main",
+            ep_num %in% random_other ~ "random_other",
+            ep_num == 96 ~ "bl_spine"),
+        holiday = case_when(
+          grepl("(Christmas| Holiday |-mas)", title) ~ "christmas",
+          grepl("Halloween", description) & subseries != "wheel" ~ "halloween",
+          grepl("Hollywood Cop", title) ~ "tums festival", # watch the episode...
+          TRUE ~ "none"),
+          date = as_datetime(date))
+
+
+```
+
+
+
+## Fan-supplied Metatdata
+
+The [RedLetterMedia subreddit](https://www.reddit.com/r/RedLetterMedia/) has a fan-updated spreadsheet containing more information on all the episodes in the series (featured panelists, winning movies and videos, etc.). After filling in some missing datapoints manually, we process the data set as follows: 
+
+```{r}
+# First, a helper function for later on 
+get_duration <- function(time) { 
+  time %>%
+    str_split(" ") %>%
+    purrr::map_chr(2) %>%
+    lubridate::hms()
+}
+
+fansheet1 <- read_excel(here("data/reddit_sheet.xlsx"), sheet =1) %>%
+  purrr::discard(~all(is.na(.))) %>% # Drops NA whitespace columns 
+  select(-24)
+
+fansheet2 <- read_excel(here("data/reddit_sheet.xlsx"), sheet = 2) %>% 
+  select(-3, -11) 
+
+# Replacing some of the "✓"/"X" columns with more informative values
+## TO-DO: Replace with apply() family functions 
+for (i in c(8:15)) {
+  fansheet1[[i]] <- case_when(grepl("✓", fansheet1[[i]]) ~ names(fansheet1)[[i]],
+                               grepl("X", fansheet1[[i]]) ~ "",
+                               TRUE ~ fansheet1[[i]]) } # TRUE is the else condition
+for (i in c(3:8)) {
+  fansheet2[[i]] <- case_when(grepl("✓", fansheet2[[i]]) ~ names(fansheet2)[[i]],
+                               grepl("X", fansheet2[[i]]) ~ "",
+                               TRUE ~ fansheet2[[i]]) }
+
+fansheet <- full_join(fansheet1, fansheet2) %>% 
+  rename_all(tolower) %>%
+  rename(theme = `theme / gimmick`, best = `best of the worst`,
+         worst = `worst of the worst`, destruction_method = `method of destruction`,
+         date = `date released`) %>%
+  mutate(`first film` = if_else(is.na(`first film`), film, `first film`),
+         theme = if_else(is.na(theme), "spotlight", theme)) %>%
+  unite("films", 2:4, sep = ", ", remove = TRUE, na.rm = TRUE) %>%
+  unite("panelists", mike:guests, sep = " ", remove = TRUE, na.rm = TRUE) %>%
+  mutate(panelists = str_squish(str_remove_all(panelists, "from Canada|&")), 
+         duration = get_duration(length),
+         unanimous_win = case_when(grepl("✓", `unanimous win`) ~ "yes",
+                               grepl("X", `unanimous win`) ~ "no",
+                               TRUE ~ `unanimous win`)) %>% # NA
+  select(episode, date, duration, films:best, unanimous_win, worst:destruction_method,
+         -`youtube links`, -`# gimmik`)         
+```
+
+You might have noticed that `r fansheet$date` doesn't always agree with the date column as generated by Tuber (`r botw.df$date`). This is because `r get_playlist_items()` gave us the date on which the video was added to the *playlist*, not its YouTube upload date. One can use `r get_video_details()` to access the upload date of each video directly: 
+
+```{r}
+date_check <- character(length(botw.df$pl_order))
+
+for (i in seq_along(botw.df$pl_order)) {
+
+  out <- tuber::get_video_details(botw.df$video_id[[i]],
+                                          part = "snippet")$items[[1]]$snippet$publishedAt
+  if (!is.null(out)) {
+    date_check[[i]] <- out
+  }
+}  
+
+dc_df <- as_tibble(ymd_hms(date_check))
+colnames(dc_df) <- c("date")
+dc_df <- dc_df %>% mutate(pl_order = row_number()) %>% 
+  select(pl_order, date) 
+
+  
+```
+
+We can then check the fan dates against these to identify any potential re-uploads: 
+
+```{r}
+# dc_df %>% 
+#   arrange(date) %>% 
+#   filter(pl_order < lag(pl_order)) #Episodes 2 and 26 were re-uploaded
+# # Episode 92 was deleted so its original upload date is inaccessible 
+# ```
+
+```
+
+
+

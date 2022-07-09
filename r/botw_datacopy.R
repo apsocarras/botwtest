@@ -8,7 +8,6 @@ library(readxl)
 library(tidyjson)
 library(roperators)
 
-
 #### API LOG-IN info #### 
 #Web Client ID: 750567258427-2msp8ndrkiiumuv5i40ni76cai7129dd.apps.googleusercontent.com
 #Web Client Secret: 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
@@ -40,7 +39,7 @@ scrape1 <- get_playlist_items(filter =
 scrape2 <- get_playlist_items(filter =
           c(playlist_id = play_id),
           part = "snippet",
-          max_results = 50,
+          max_results = 100,
           simplify = FALSE)                 
 
 scrape1.df <- scrape1 %>% 
@@ -79,7 +78,7 @@ episodes <- full_join(scrape1.df,scrape2.df) %>%
 
 non_episodes <- full_join(scrape1.df,scrape2.df) %>%
   filter(!grepl("Best of the Worst(:| Episode| Spotlight)",title))
-
+ 
 botw.df <- full_join(non_episodes, episodes) %>%
   arrange(pl_order) %>%
   mutate(ep_num = case_when(ep_num == 28 ~ 27.5,
@@ -123,7 +122,7 @@ fanPath <- "~/R/BestoftheWorst/data/BoTW Spreadsheet V2 .xlsx"
 get_duration <- function(time) { # remove junk ymd data from length column
   time %>%
     str_split(" ") %>%
-    map_chr(2) %>%
+    purrr::map_chr(2) %>%
     lubridate::hms()
   } # we'll need this for the next two sheets
 
