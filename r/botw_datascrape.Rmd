@@ -255,7 +255,6 @@ botw.df <- left_join(botw.df, date_check) %>%
 # writexl::write_xlsx(botw.df,here("data/botw.xlsx"))
 ``` 
 
-## Temp closed
 Instead of just fixing the dates in `botw.df`, let's attach all the other columns from `fansheet` as well. Before we do that, we'll have to edit the fan data set to fit with the changes we made to the "half" episodes earlier:
 
 ```{r}
@@ -275,9 +274,12 @@ fansheet[grep("Partners", fansheet$films), "duration"] <- ms("38M 0S")
 fansheet[grep("Partners", fansheet$films), "episode"] <- 63.5
 
 
-left_join(botw.df, fansheet, by = c("ep_num" = "episode")) %>%
+botw.df2 <- left_join(botw.df, fansheet, by = c("ep_num" = "episode")) %>%
   select(pl_order, ep_num, upload_date, title, description, subseries, holiday, theme, duration, films, best, unanimous_win, worst, destruction_method,`non-reviewed / extra videos`, panelists, editor, video_id) 
 
 ```
 
+# Next Steps: 
+
+In the next phase of this project, we'll use the Python `YTApi` package to obtain transcripts of the episodes in the series, isolate the discussion portions, and match them to the movies being discussed. 
 
