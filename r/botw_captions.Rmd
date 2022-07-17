@@ -1,0 +1,117 @@
+---
+title: 'Best of the Worst: Youtube Transcripts'
+output: html_document
+date: '2022-07-16'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+In this next stage of our project we will use the Python package `python YouTubeTranscriptApi` (YTA) to obtain the captions for all the episodes in the *Best of the Worst* movie review series on YouTube. From there we'll return to R to process the data using our preferred tidyverse tools. 
+
+## Obtaining and Structuring Transcripts
+
+```{python}
+# For instructions on integrating Python with R in R Markdown, see here: https://github.com/rstudio/reticulate#python-in-r-markdown
+
+import pandas as pd
+from pathlib import Path
+from youtube_transcript_api import YouTubeTranscriptApi as YTA
+import json # output format of YTA
+
+data_path = Path.cwd().parent / 'data'
+
+botw_df = pd.read_excel(data_path / 'botw.xlsx')
+vid_ids = botw_df.loc[:,["ep_num", "video_id"]].dropna()
+
+```
+
+``` {python}
+caps = list()
+for video in vid_ids["video_id"]:
+  row_index = vid_ids.index[vid_ids["video_id"] == video].tolist()
+  ep_no = vid_ids["ep_num"][row_index].tolist()[0]
+  try:
+    transcript = YTA.get_transcript(video, cookies = data_path / 'full_playlist_cookies.txt') # see **note
+    for line in transcript:
+      line.update({"ep_num":ep_no})
+  except:
+    transcript = [{"text": "Transcript Unavailable", "start": None, "duration":None, "ep_num":ep_no}]
+  caps.extend(transcript)
+
+# with open(data_path / "captions.json", "w") as outfile: 
+#   json.dump(caps, outfile)  
+  
+```
+
+For any age-restricted video, YTA needs to know its page cookies in order to access its captions. Rather than going through each video separately to determine which were age-restricted, I downloaded the cookie information of all the videos on the playlist page and saved it in `data/full_playlist_cookies.txt` (see the YTA [github](https://github.com/jdepoix/youtube-transcript-api) page under "Cookies" for more information). 
+
+```{r}
+
+library(here)
+
+# Tidyverse packages from library(tidyverse)
+library(tidyjson)
+library(dplyr)
+library(tibble)
+library(readr)
+
+captions.json <- read_json(paste0(here(), "/data/captions.json"))
+
+captions.df <- captions.json %>%
+  gather_array %>%
+  spread_values(text = jstring("text"),
+                start = jstring("start"),
+                duration = jstring("duration"),
+                ep_num = jstring("ep_num")) %>%
+  as_tibble %>%
+  select(ep_num, text, start, duration)
+
+captions.df <- captions.df %>% mutate(ep_num = as.numeric(ep_num))
+
+# write_excel_csv(captions.df, paste0(here(), "/data/captions.csv"))
+```
+
+Tragically, this leaves 24 episodes with no YouTube-provided captions:
+
+```{r}
+captions.df %>% filter(text == "Transcript Unavailable")
+```
+
+(I may or may not return to these videos in a later project where I attempt to generate my own automated  captions, but for now we'll press on). 
+
+## Adding Tags to the Discussion
+
+In addition to the episode it appears in, for every line of text we want our data set to indicate:
+
+1.) Which segment of the episode the line appears in. 
+2.) If it's in a discussion segment, which movie/video in the episode it pertains to.
+
+Every episode can be divided into three sorts of segments:
+
+|   Introduction: the gang introduces the movies/videos they will watch 
+|   Discussions: broken up by each film and/or video under discussion
+|   Conclusion: wrap-up and final vote on which movie/video is the best/worst
+
+To this end, yours truly went back through the series in painstaking detail
+
+
+```{r}
+View(captions.df %>% filter(ep_num == 1))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
